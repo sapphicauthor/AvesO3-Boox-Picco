@@ -118,8 +118,15 @@ class EpubReaderActivity final : public ReaderActivity {
   static constexpr size_t BACKGROUND_BUILD_MIN_MAX_ALLOC = 16 * 1024;
   bool buildTickHeapGate();
   bool buildHeapPaused = false;
+  // One bounded build step on the loop task, in a frame whose input did nothing. Lays out about
+  // BACKGROUND_BUILD_PAGES_PER_TICK pages, so the open chapter is finished while the reader is idle.
+  void backgroundBuildTick();
+  bool anyButtonPressed() const;
+  bool backgroundBuildWanted() const;
+  // A background build failed in this spine. The error would likely recur, so from then on the
+  // spine is built only as far as the reader goes; pages from earlier build steps stay readable.
+  int backgroundBuildFailedSpine = -1;
   static constexpr size_t RENDER_MIN_FREE_HEAP = 24 * 1024;
-  static constexpr int BUILD_WINDOW_AHEAD = 5;
   static constexpr int PARTIAL_REBUILD_START_MARGIN = 15;
   static constexpr int BUILD_POPUP_PAGE_THRESHOLD = 20;
   static constexpr size_t BUILD_POPUP_BYTE_THRESHOLD = 96 * 1024;

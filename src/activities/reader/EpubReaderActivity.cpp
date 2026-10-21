@@ -348,6 +348,36 @@ void EpubReaderActivity::showBuildPopup(GfxRenderer& renderer, int& pagesUntilFu
   buildPopupPending = false;
 }
 
+// Debounced state of every button. Covers the frame between a raw release and its debounced
+// release edge, which would otherwise run a build step before the page turn.
+bool EpubReaderActivity::anyButtonPressed() const {
+  using Button = MappedInputManager::Button;
+  for (const Button button :
+       {Button::Back, Button::Confirm, Button::Left, Button::Right, Button::Up, Button::Down, Button::Power}) {
+    if (mappedInput.isPressed(button)) return true;
+  }
+  return false;
+}
+
+void EpubReaderActivity::backgroundBuildTick() {
+  // Not under an open toolbar or panel (those repaint straight onto the page), and not while the
+  // render task holds the lock.
+  if (overlay != Overlay::None || RenderLock::peek() || !backgroundBuildWanted()) return;
+  // A button is down or a page turn is queued: the next loop frames act on it first.
+  if (anyButtonPressed() || pendingManualTurn != 0 || !buildTickHeapGate()) return;
+  RenderLock lock;
+  if (!backgroundBuildWanted()) return;
+  if (!section->buildSomeMore(BACKGROUND_BUILD_PAGES_PER_TICK)) {
+    LOG_ERR("ERS", "Background section build failed");
+    backgroundBuildFailedSpine = currentSpineIndex;
+    nextPageNumber = section->currentPage;
+    section.reset();
+    requestUpdate();
+  } else if (section->isBuildComplete() && applyDeferredReposition()) {
+    requestUpdate();
+  }
+}
+
 void EpubReaderActivity::openDictionaryWordSelect() {
   if (SETTINGS.dictionaryName[0] == '\0') {
     showDictionaryMessage = true;
@@ -414,21 +444,6 @@ void EpubReaderActivity::loop() {
     } else {
       LOG_DBG("ERS", "Reader near partial watermark (%d/%d), resuming extension build", section->currentPage,
               section->pageCount);
-    }
-  }
-
-  if (section && section->isBuilding() && !RenderLock::peek() &&
-      (section->isPartial() || static_cast<int>(section->pageCount) < section->currentPage + BUILD_WINDOW_AHEAD) &&
-      buildTickHeapGate()) {
-    RenderLock lock;
-    if (section->isBuilding() && buildTickHeapGate()) {
-      if (!section->buildSomeMore(BACKGROUND_BUILD_PAGES_PER_TICK)) {
-        LOG_ERR("ERS", "Background section build failed");
-        section.reset();
-        requestUpdate();
-      } else if (section->isBuildComplete() && applyDeferredReposition()) {
-        requestUpdate();
-      }
     }
   }
 
@@ -637,6 +652,7 @@ void EpubReaderActivity::loop() {
     } else {
       openReaderMenu();
     }
+    return;  // no build step before the menu shows
   }
 
   const bool backPressed = mappedInput.isPressed(MappedInputManager::Button::Back);
@@ -699,8 +715,11 @@ void EpubReaderActivity::loop() {
   auto [prevTriggered, nextTriggered, fromTilt] = ReaderUtils::detectPageTurn(mappedInput);
   prevTriggered = prevTriggered || touch.prev;
   nextTriggered = nextTriggered || touch.next;
-  
-  if (!prevTriggered && !nextTriggered) return;
+  if (!prevTriggered && !nextTriggered) {
+    // Nothing to act on in this frame: build more of the chapter.
+    backgroundBuildTick();
+    return;
+  }
 
   if (handleEndOfBookPageTurn(prevTriggered, nextTriggered)) return;
 
@@ -1188,9 +1207,15 @@ void EpubReaderActivity::onReturnFromEndOfBook() {
   }
 }
 
+// A started build runs to the end of the chapter, one bounded step per idle loop frame, so the
+// parser and its page table are freed soon. Not in a spine whose background build failed.
+bool EpubReaderActivity::backgroundBuildWanted() const {
+  return section && section->isBuilding() && currentSpineIndex != backgroundBuildFailedSpine;
+}
+
 bool EpubReaderActivity::skipLoopDelay() {
-  return section && section->isBuilding() && !buildHeapPaused &&
-         (section->isPartial() || static_cast<int>(section->pageCount) < section->currentPage + BUILD_WINDOW_AHEAD);
+  // The main loop holds the render lock while querying this hint.
+  return overlay == Overlay::None && !buildHeapPaused && backgroundBuildWanted();
 }
 
 void EpubReaderActivity::renderBook() {
