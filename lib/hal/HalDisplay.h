@@ -14,6 +14,10 @@ class HalDisplay {
   using GrayscaleEncoding = freeink::GrayscaleEncoding;
 
   GrayscaleCapabilities grayscaleCapabilities(GrayscaleMode mode = GrayscaleMode::Overlay) const;
+  // Part number of the panel the boot probe identified (null if unknown).
+  const char* panelName() const { return einkDisplay.getPanelName(); }
+  // True asks text-overlay gray passes for every gray level (image pages).
+  void setOverlayFullTone(bool fullTone) { einkDisplay.setOverlayFullTone(fullTone); }
 
   // Constructor with pin configuration
   HalDisplay();
@@ -74,6 +78,8 @@ class HalDisplay {
 
   // Power management
   void deepSleep();
+  // Power the panel down between frames, keeping its image; the next paint wakes it.
+  void controllerIdle();
 
   // Access to frame buffer
   uint8_t* getFrameBuffer() const;

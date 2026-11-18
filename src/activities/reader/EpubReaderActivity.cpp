@@ -1328,6 +1328,9 @@ void EpubReaderActivity::renderBook() {
             if (buildPopupPending && millis() - buildStartMs >= BUILD_POPUP_DEADLINE_MS) {
               showBuildPopup(renderer, pagesUntilFullRefresh);
             }
+            // The render lock is held for the whole build, so the main loop
+            // cannot power the EEGO A4 panel down; left powered it fuzzes.
+            if (BoardConfig::isEegoA4()) display.controllerIdle();
             if (!section->buildSomeMore(BUILD_PAGES_PER_CHUNK)) {
               LOG_ERR("ERS", "Failed during incremental section build");
               section.reset();
@@ -1658,6 +1661,12 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
   const auto tPrewarm = millis();
 
   const bool pageHasImages = page->hasImages();
+  // Images keep every gray level on panels that otherwise render the text
+  // overlay with fewer.
+  struct FullToneScope {
+    ~FullToneScope() { display.setOverlayFullTone(false); }
+  } fullToneScope;
+  display.setOverlayFullTone(pageHasImages);
   const bool pageHasImagesNeedingDecode = pageHasImages && page->hasImagesNeedingDecode();
   const bool manualRefreshPending = false; 
   const bool cleanImageBasePending = manualRefreshPending || pagesUntilFullRefresh <= 1;
