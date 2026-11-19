@@ -23,6 +23,12 @@ constexpr char latestReleaseUrl[] = "https://api.github.com/repos/SiliconAves/Av
 }  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
+#if !(defined(AVESO3_ENABLE_OTA) && AVESO3_ENABLE_OTA)
+  // Personal fork: never contact the upstream release feed unless OTA is
+  // explicitly enabled at build time (-DAVESO3_ENABLE_OTA=1).
+  LOG_INF("OTA", "Online updates disabled in this build");
+  return NO_UPDATE;
+#endif
   LOG_DBG("OTA", "Checking for update (current: %s)", CROSSPOINT_VERSION);
 
   // Stream the ~32KB release JSON straight into the parser as it arrives.
