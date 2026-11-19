@@ -1,5 +1,7 @@
 #include "Epub.h"
 
+#include <BoardConfig.h>
+
 #include <FsHelpers.h>
 #include <HalStorage.h>
 #include <JpegToBmpConverter.h>
@@ -677,7 +679,10 @@ const std::string& Epub::getLanguage() const {
 }
 
 std::string Epub::getCoverBmpPath(bool cropped) const {
-  const auto coverFileName = std::string("cover") + (cropped ? "_crop" : "");
+  // The Picco caches its own covers: its panel geometry differs from the X4's,
+  // so a cover scaled for another board must not be reused.
+  const auto coverFileName =
+      std::string("cover") + (BoardConfig::isPicco() ? "_picco" : "") + (cropped ? "_crop" : "");
   return cachePath + "/" + coverFileName + ".bmp";
 }
 

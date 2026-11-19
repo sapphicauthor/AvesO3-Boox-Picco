@@ -1,5 +1,6 @@
 #include "Txt.h"
 
+#include <BoardConfig.h>
 #include <FsHelpers.h>
 #include <JpegToBmpConverter.h>
 #include <Logging.h>
@@ -95,7 +96,10 @@ std::string Txt::findCoverImage() const {
   return "";
 }
 
-std::string Txt::getCoverBmpPath() const { return cachePath + "/cover.bmp"; }
+std::string Txt::getCoverBmpPath() const {
+  // Picco covers are cached separately (different panel geometry).
+  return cachePath + (BoardConfig::isPicco() ? "/cover_picco.bmp" : "/cover.bmp");
+}
 
 bool Txt::generateCoverBmp() const {
   // Already generated, return true
