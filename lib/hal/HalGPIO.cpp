@@ -166,6 +166,10 @@ bool HalGPIO::hasTouch() const { return inputMgr.hasTouch(); }
 
 bool HalGPIO::hasHomeKey() const { return BoardConfig::hasHomeKey(); }
 
+bool HalGPIO::hasToggleSwitch() const { return inputMgr.hasToggleSwitch(); }
+
+bool HalGPIO::isToggleSwitchOn() const { return inputMgr.isToggleSwitchOn(); }
+
 bool HalGPIO::wasHomeKeyTapped() const { return inputMgr.wasHomeKeyTapped(); }
 
 bool HalGPIO::wasHomeKeyLongPressed() const { return inputMgr.wasHomeKeyLongPressed(); }

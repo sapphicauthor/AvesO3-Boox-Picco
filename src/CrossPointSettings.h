@@ -130,6 +130,14 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     REFRESH_FREQUENCY_COUNT
   };
 
+  // Hardware slide switch actions: the switch position drives the chosen setting.
+  enum SLIDE_SWITCH_ACTION {
+    SLIDE_SWITCH_FRONTLIGHT = 0,
+    SLIDE_SWITCH_NIGHT_MODE = 1,
+    SLIDE_SWITCH_TOUCH_READER_CONTROLS = 2,
+    SLIDE_SWITCH_ACTION_COUNT
+  };
+
   // Short power button press actions
   enum SHORT_PWRBTN {
     IGNORE = 0,
@@ -322,6 +330,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // Restore the saved on/off state after a normal boot or wake. Brightness and
   // warmth are always remembered even when this is disabled.
   uint8_t frontlightRestoreOnWake = 1;
+  // What the hardware slide switch (BoardConfig input.toggleSwitch) controls.
+  uint8_t slideSwitchAction = SLIDE_SWITCH_FRONTLIGHT;
   // Language setting (Language enum index, default 0 = EN)
   uint8_t language = 0;
   // Keyboard layouts the user can reach, using keyboard_layouts::ALL table bits.

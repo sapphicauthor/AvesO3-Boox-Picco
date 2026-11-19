@@ -258,6 +258,42 @@ bool handleX4ProFrontlightDoubleClick() {
   return true;
 }
 
+// Drive the setting chosen in Slide Switch from the hardware switch position.
+// The first pass, and any change of the chosen action, syncs the setting to the
+// current position; after that only switch movements change it.
+void handleSlideSwitch() {
+  if (!gpio.hasToggleSwitch()) return;
+  const bool on = gpio.isToggleSwitchOn();
+
+  static int lastAction = -1;
+  static int lastOn = -1;
+  if (SETTINGS.slideSwitchAction == lastAction && lastOn == static_cast<int>(on)) return;
+  lastOn = on;
+  lastAction = SETTINGS.slideSwitchAction;
+
+  switch (SETTINGS.slideSwitchAction) {
+    case CrossPointSettings::SLIDE_SWITCH_NIGHT_MODE:
+      if ((SETTINGS.screenInverted != 0) == on) return;
+      SETTINGS.screenInverted = on;
+      break;
+    case CrossPointSettings::SLIDE_SWITCH_TOUCH_READER_CONTROLS:
+      // On selects Tap; an already-enabled mode (e.g. Swipe) is left as is.
+      if ((SETTINGS.touchReaderControls != 0) == on) return;
+      SETTINGS.touchReaderControls = on;
+      break;
+    case CrossPointSettings::SLIDE_SWITCH_FRONTLIGHT:
+    default:
+      if (!Frontlight.present()) return;
+      if (Frontlight.isOn() == on && (SETTINGS.frontlightOn != 0) == on) return;
+      Frontlight.setOn(on);
+      SETTINGS.frontlightOn = on;
+      break;
+  }
+  SETTINGS.saveToFile();
+  activityManager.requestUpdate();
+  LOG_INF("SWITCH", "Slide switch %s", on ? "on" : "off");
+}
+
 constexpr char SLEEP_FRAME_FILE[] = "/.crosspoint/sleep_frame.bin";
 
 static void saveSleepFrameBuffer() {
@@ -466,7 +502,13 @@ void setup() {
   // Brightness and warmth are always restored. A normal wake starts with the
   // light off unless Restore Light on Wake is enabled; silent maintenance
   // reboots preserve the live state so they do not unexpectedly go dark.
-  const bool restoreLightOn = SETTINGS.frontlightOn != 0 && (SETTINGS.frontlightRestoreOnWake != 0 || isSilentReboot);
+  // When the slide switch controls the light, its position wins over the
+  // restore rule.
+  const bool switchDrivesLight =
+      gpio.hasToggleSwitch() && SETTINGS.slideSwitchAction == CrossPointSettings::SLIDE_SWITCH_FRONTLIGHT;
+  const bool restoreLightOn =
+      switchDrivesLight ? gpio.isToggleSwitchOn()
+                        : SETTINGS.frontlightOn != 0 && (SETTINGS.frontlightRestoreOnWake != 0 || isSilentReboot);
   Frontlight.begin(SETTINGS.frontlightBrightness, SETTINGS.frontlightWarmth, restoreLightOn);
 
   switch (wakeupReason) {
@@ -654,6 +696,8 @@ void loop() {
     }
     return;
   }
+
+  handleSlideSwitch();
 
   halTiltSensor.update(SETTINGS.tiltPageTurn, SETTINGS.orientation, activityManager.isReaderActivity());
 
