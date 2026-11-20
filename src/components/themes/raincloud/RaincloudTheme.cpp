@@ -161,9 +161,15 @@ bool renderBackgroundBmp(const GfxRenderer& renderer, const std::string& path, u
 
   auto outputRow = makeUniqueNoThrow<uint8_t[]>((bmpWidth + 3) / 4);
   auto rowBytes = makeUniqueNoThrow<uint8_t[]>(bitmap.getRowBytes());
-  if (!outputRow || !rowBytes) {
+  // Source column of every screen column: the same for every row, so it is
+  // worked out once instead of with a float divide per pixel.
+  auto srcColumns = makeUniqueNoThrow<int[]>(screenWidth);
+  if (!outputRow || !rowBytes || !srcColumns) {
     LOG_ERR("THEME", "OOM: background BMP row buffers");
     return false;
+  }
+  for (int x = 0; x < screenWidth; x++) {
+    srcColumns[x] = std::min(static_cast<int>((x + 0.5f) * cropWidth / screenWidth + cropX), bmpWidth - 1);
   }
 
   const int renderMode = renderer.getRenderMode();
@@ -187,7 +193,7 @@ bool renderBackgroundBmp(const GfxRenderer& renderer, const std::string& path, u
       if (srcY != srcRow) break;
 
       for (int x = 0; x < screenWidth; x++) {
-        const int srcX = std::min(static_cast<int>((x + 0.5f) * cropWidth / screenWidth + cropX), bmpWidth - 1);
+        const int srcX = srcColumns[x];
         const uint8_t level = (outputRow[srcX / 4] >> (6 - (srcX * 2) % 8)) & 0x3;
         if (cache) {
           const size_t cacheIndex = static_cast<size_t>(screenY) * screenWidth + x;
