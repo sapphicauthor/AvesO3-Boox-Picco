@@ -186,15 +186,28 @@ void XtcReaderActivity::renderPage() {
 
   renderer.clearScreen();
 
-  const uint16_t maxSrcY = pageHeight;
+  // Fit the page to the screen: keep its aspect ratio, centre it, and turn it
+  // with the reader orientation. Every screen pixel samples one page pixel.
+  const GfxRenderer::Orientation orientation = renderer.getOrientation();
+  const bool rotated =
+      orientation == GfxRenderer::LandscapeClockwise || orientation == GfxRenderer::LandscapeCounterClockwise;
+  const int srcWidth = rotated ? pageHeight : pageWidth;
+  const int srcHeight = rotated ? pageWidth : pageHeight;
+  const float scale = std::min(static_cast<float>(screenWidth) / static_cast<float>(srcWidth),
+                               static_cast<float>(screenHeight) / static_cast<float>(srcHeight));
+  const int dstWidth = std::max(1, static_cast<int>(srcWidth * scale));
+  const int dstHeight = std::max(1, static_cast<int>(srcHeight * scale));
+  const int offsetX = (screenWidth - dstWidth) / 2;
+  const int offsetY = (screenHeight - dstHeight) / 2;
 
-  if (bitDepth == 2) {
-    const size_t planeSize = (static_cast<size_t>(pageWidth) * pageHeight + 7) / 8;
-    const uint8_t* plane1 = pageBuffer;
-    const uint8_t* plane2 = pageBuffer + planeSize;
-    const size_t colBytes = (pageHeight + 7) / 8;
+  const uint8_t* plane1 = pageBuffer;
+  const uint8_t* plane2 = bitDepth == 2 ? pageBuffer + (static_cast<size_t>(pageWidth) * pageHeight + 7) / 8 : nullptr;
+  const size_t colBytes = (pageHeight + 7) / 8;
+  const size_t rowBytes = (pageWidth + 7) / 8;
 
-    auto getPixelValue = [&](uint16_t x, uint16_t y) -> uint8_t {
+  // Page pixel value: 0..3 for 2-bit pages, 1 = black / 0 = white for 1-bit pages.
+  auto getPixelValue = [&](int x, int y) -> uint8_t {
+    if (bitDepth == 2) {
       const size_t colIndex = pageWidth - 1 - x;
       const size_t byteInCol = y / 8;
       const size_t bitInByte = 7 - (y % 8);
@@ -202,11 +215,38 @@ void XtcReaderActivity::renderPage() {
       const uint8_t bit1 = (plane1[byteOffset] >> bitInByte) & 1;
       const uint8_t bit2 = (plane2[byteOffset] >> bitInByte) & 1;
       return (bit1 << 1) | bit2;
-    };
+    }
+    const size_t srcRowStart = y * rowBytes;
+    const size_t srcByte = srcRowStart + x / 8;
+    const size_t srcBit = 7 - (x % 8);
+    return !((pageBuffer[srcByte] >> srcBit) & 1);
+  };
 
-    for (uint16_t y = 0; y < pageHeight; y++) {
-      for (uint16_t x = 0; x < pageWidth; x++) {
-        if (getPixelValue(x, y) >= 1) {
+  auto getScreenPixelValue = [&](int screenX, int screenY) -> uint8_t {
+    const int dx = screenX - offsetX;
+    const int dy = screenY - offsetY;
+    if (dx < 0 || dy < 0 || dx >= dstWidth || dy >= dstHeight) {
+      return 0;
+    }
+    const int u = std::min(srcWidth * dx / dstWidth, srcWidth - 1);
+    const int v = std::min(srcHeight * dy / dstHeight, srcHeight - 1);
+    int x = u;
+    int y = v;
+    const GfxRenderer::Orientation o = renderer.getOrientation();
+    if (o == GfxRenderer::LandscapeClockwise) {
+      x = v;
+      y = pageHeight - 1 - u;
+    } else if (o == GfxRenderer::LandscapeCounterClockwise) {
+      x = pageWidth - 1 - v;
+      y = u;
+    }
+    return getPixelValue(x, y);
+  };
+
+  if (bitDepth == 2) {
+    for (int y = 0; y < screenHeight; y++) {
+      for (int x = 0; x < screenWidth; x++) {
+        if (getScreenPixelValue(x, y) >= 1) {
           renderer.drawPixel(x, y, true);
         }
       }
@@ -231,9 +271,9 @@ void XtcReaderActivity::renderPage() {
     }
 
     renderer.clearScreen(0x00);
-    for (uint16_t y = 0; y < pageHeight; y++) {
-      for (uint16_t x = 0; x < pageWidth; x++) {
-        if (getPixelValue(x, y) == 1) {
+    for (int y = 0; y < screenHeight; y++) {
+      for (int x = 0; x < screenWidth; x++) {
+        if (getScreenPixelValue(x, y) == 1) {
           renderer.drawPixel(x, y, false);
         }
       }
@@ -241,9 +281,9 @@ void XtcReaderActivity::renderPage() {
     renderer.copyGrayscaleLsbBuffers();
 
     renderer.clearScreen(0x00);
-    for (uint16_t y = 0; y < pageHeight; y++) {
-      for (uint16_t x = 0; x < pageWidth; x++) {
-        const uint8_t pv = getPixelValue(x, y);
+    for (int y = 0; y < screenHeight; y++) {
+      for (int x = 0; x < screenWidth; x++) {
+        const uint8_t pv = getScreenPixelValue(x, y);
         if (pv == 1 || pv == 2) {
           renderer.drawPixel(x, y, false);
         }
@@ -254,9 +294,9 @@ void XtcReaderActivity::renderPage() {
     renderer.displayGrayBuffer();
 
     renderer.clearScreen();
-    for (uint16_t y = 0; y < pageHeight; y++) {
-      for (uint16_t x = 0; x < pageWidth; x++) {
-        if (getPixelValue(x, y) >= 1) {
+    for (int y = 0; y < screenHeight; y++) {
+      for (int x = 0; x < screenWidth; x++) {
+        if (getScreenPixelValue(x, y) >= 1) {
           renderer.drawPixel(x, y, true);
         }
       }
@@ -269,18 +309,10 @@ void XtcReaderActivity::renderPage() {
     LOG_DBG("XTR", "Rendered page %lu/%lu (2-bit grayscale)", currentPage + 1, xtc->getPageCount());
     return;
   } else {
-    const size_t srcRowBytes = (pageWidth + 7) / 8;
-
-    for (uint16_t srcY = 0; srcY < maxSrcY; srcY++) {
-      const size_t srcRowStart = srcY * srcRowBytes;
-
-      for (uint16_t srcX = 0; srcX < pageWidth; srcX++) {
-        const size_t srcByte = srcRowStart + srcX / 8;
-        const size_t srcBit = 7 - (srcX % 8);
-        const bool isBlack = !((pageBuffer[srcByte] >> srcBit) & 1);
-
-        if (isBlack) {
-          renderer.drawPixel(srcX, srcY, true);
+    for (int y = 0; y < screenHeight; y++) {
+      for (int x = 0; x < screenWidth; x++) {
+        if (getScreenPixelValue(x, y)) {
+          renderer.drawPixel(x, y, true);
         }
       }
     }
