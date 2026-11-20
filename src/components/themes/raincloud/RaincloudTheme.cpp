@@ -89,35 +89,24 @@ bool pickRandomBackground(const char* dirPath, std::string& selectedPath) {
     return false;
   }
 
+  // One pass with reservoir sampling: the n-th usable file replaces the pick
+  // with probability 1/n, which leaves every file equally likely without a
+  // second directory scan (each scan parses every BMP header from the SD card).
   uint16_t fileCount = 0;
   while (fileCount < UINT16_MAX) {
     auto file = dir.openNextFile();
     if (!file) break;
     file.getName(name.get(), kMaxBackgroundFileNameLen);
-    fileCount += isUsableBackground(file, name.get());
-  }
-  if (fileCount == 0) return false;
-
-  const auto target = static_cast<uint16_t>(random(fileCount));
-  dir.rewindDirectory();
-  uint16_t index = 0;
-  bool found = false;
-  while (true) {
-    auto file = dir.openNextFile();
-    if (!file) break;
-    file.getName(name.get(), kMaxBackgroundFileNameLen);
     if (!isUsableBackground(file, name.get())) continue;
-    if (index == target) {
+    fileCount++;
+    if (random(fileCount) == 0) {
       selectedPath.reserve(strlen(dirPath) + strlen(name.get()) + 1);
       selectedPath = dirPath;
       selectedPath += "/";
       selectedPath += name.get();
-      found = true;
-      break;
     }
-    index++;
   }
-  return found;
+  return fileCount > 0;
 }
 
 // Draw a BMP scaled to cover the screen (centre crop). When cache is set, the
