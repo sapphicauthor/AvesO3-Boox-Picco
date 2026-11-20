@@ -13,6 +13,7 @@
 #include "components/themes/BaseTheme.h"
 #include "components/themes/lyra/Lyra3CoversTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
+#include "components/themes/raincloud/RaincloudExtendedTheme.h"
 #include "components/themes/raincloud/RaincloudTheme.h"
 #include "components/themes/roundedraff/RoundedRaffTheme.h"
 
@@ -54,6 +55,11 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       LOG_DBG("UI", "Using Raincloud theme");
       currentTheme = std::make_unique<RaincloudTheme>();
       currentMetrics = &LyraMetrics::values;
+      break;
+    case CrossPointSettings::UI_THEME::RAINCLOUD_EXTENDED:
+      LOG_DBG("UI", "Using Raincloud Extended theme");
+      currentTheme = std::make_unique<RaincloudExtendedTheme>();
+      currentMetrics = &Lyra3CoversMetrics::values;
       break;
   }
   metricsValid = false;

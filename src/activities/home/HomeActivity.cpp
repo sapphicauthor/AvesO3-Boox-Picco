@@ -238,7 +238,8 @@ void HomeActivity::loop() {
     }
   };
 
-  if (SETTINGS.uiTheme == CrossPointSettings::LYRA_3_COVERS) {
+  if (SETTINGS.uiTheme == CrossPointSettings::LYRA_3_COVERS ||
+      SETTINGS.uiTheme == CrossPointSettings::RAINCLOUD_EXTENDED) {
     const int booksCount = static_cast<int>(recentBooks.size());
 
     // Horizontal (Front buttons) - Linear (Release) | Jump to Menu / Skip 2 (Hold)
