@@ -16,6 +16,7 @@ class RaincloudTheme : public LyraTheme {
  public:
   bool isHomeHeaderRect(const GfxRenderer& renderer, Rect rect) const override;
   void drawHomeBackground(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const override;
+  void finishHomeScreen(GfxRenderer& renderer) const override;
   void fillSelectionBackground(const GfxRenderer& renderer, int x, int y, int width, int height) const override;
 
  private:
@@ -45,5 +46,16 @@ class RaincloudTheme : public LyraTheme {
   mutable bool backgroundIndexValid = false;
   mutable uint32_t backgroundIndexEpoch = 0;
 
+  // Home outline: drawHomeBackground keeps a copy of the drawn background (raw
+  // framebuffer bytes) and clears the screen; finishHomeScreen lays it back in
+  // only where it stays clear of the home UI. Both buffers live in PSRAM and are
+  // reused; without them the background is simply drawn under the UI.
+  mutable std::unique_ptr<uint8_t[], PsramFree> outlineBackground;
+  mutable std::unique_ptr<uint8_t[], PsramFree> outlineMask;
+  mutable size_t outlineBackgroundSize = 0;
+  mutable size_t outlineMaskSize = 0;
+  mutable bool outlinePending = false;
+
   void pickIndexedBackground(std::string& selectedPath) const;
+  void drawBackgroundLayer(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const;
 };

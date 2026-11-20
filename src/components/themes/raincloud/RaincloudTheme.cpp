@@ -211,6 +211,109 @@ bool replayBackgroundCache(const GfxRenderer& renderer, const uint8_t* cache, co
   }
   return true;
 }
+
+// Make buf hold at least `needed` bytes of PSRAM, keeping a big enough block.
+template <typename Buffer>
+bool reservePsram(Buffer& buf, size_t& capacity, const size_t needed) {
+  if (buf && capacity >= needed) return true;
+  buf.reset(static_cast<uint8_t*>(heap_caps_malloc(needed, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
+  capacity = buf ? needed : 0;
+  return static_cast<bool>(buf);
+}
+
+// Per-pixel flags of the outline mask.
+constexpr uint8_t kInk = 1;     // the UI drew a black pixel here
+constexpr uint8_t kRow = 2;     // ink within 1 px on the same row
+constexpr uint8_t kSquare = 4;  // ink within the 3x3 square
+constexpr uint8_t kHalo = 8;    // ink within the radius-2 octagon: kept white
+constexpr uint8_t kOpen = 16;   // reachable from the screen edge without crossing a halo
+
+// Lay the background back in around a UI drawn on white: every UI pixel keeps
+// a 2 px white outline, and areas the UI encloses (covers, boxes, the holes of
+// letters) stay white, so only the open space around the UI shows the image.
+// fb and background are raw framebuffers (physical rows, 1 bit per pixel,
+// 0 = black); mask holds one flag byte per pixel. Works in physical space, so
+// it is the same for every orientation.
+void composeOutlinedBackground(uint8_t* fb, const uint8_t* background, uint8_t* mask, const int width,
+                               const int height) {
+  const int widthBytes = width / 8;
+  const auto at = [mask, width](const int x, const int y) -> uint8_t& { return mask[y * width + x]; };
+
+  for (int y = 0; y < height; y++) {
+    for (int xb = 0; xb < widthBytes; xb++) {
+      const uint8_t bits = fb[y * widthBytes + xb];
+      for (int bit = 0; bit < 8; bit++) {
+        at(xb * 8 + bit, y) = (bits & (0x80 >> bit)) ? 0 : kInk;
+      }
+    }
+  }
+
+  // Radius-2 octagon = 3x3 square, then a plus: rows, columns, then the plus.
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      if ((at(x, y) & kInk) || (x > 0 && (at(x - 1, y) & kInk)) || (x + 1 < width && (at(x + 1, y) & kInk))) {
+        at(x, y) |= kRow;
+      }
+    }
+  }
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      if ((at(x, y) & kRow) || (y > 0 && (at(x, y - 1) & kRow)) || (y + 1 < height && (at(x, y + 1) & kRow))) {
+        at(x, y) |= kSquare;
+      }
+    }
+  }
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      if ((at(x, y) & kSquare) || (x > 0 && (at(x - 1, y) & kSquare)) || (x + 1 < width && (at(x + 1, y) & kSquare)) ||
+          (y > 0 && (at(x, y - 1) & kSquare)) || (y + 1 < height && (at(x, y + 1) & kSquare))) {
+        at(x, y) |= kHalo;
+      }
+    }
+  }
+
+  // Open space: flood from the screen edge with alternating sweeps (no stack),
+  // stopping once a pair of sweeps changes nothing.
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      if ((y == 0 || x == 0 || y == height - 1 || x == width - 1) && !(at(x, y) & kHalo)) at(x, y) |= kOpen;
+    }
+  }
+  constexpr int kMaxSweeps = 64;
+  for (int sweep = 0; sweep < kMaxSweeps; sweep++) {
+    bool changed = false;
+    for (int y = 1; y < height; y++) {
+      for (int x = 1; x < width; x++) {
+        uint8_t& f = at(x, y);
+        if (!(f & (kHalo | kOpen)) && ((at(x - 1, y) & kOpen) || (at(x, y - 1) & kOpen))) {
+          f |= kOpen;
+          changed = true;
+        }
+      }
+    }
+    for (int y = height - 2; y >= 0; y--) {
+      for (int x = width - 2; x >= 0; x--) {
+        uint8_t& f = at(x, y);
+        if (!(f & (kHalo | kOpen)) && ((at(x + 1, y) & kOpen) || (at(x, y + 1) & kOpen))) {
+          f |= kOpen;
+          changed = true;
+        }
+      }
+    }
+    if (!changed) break;
+  }
+
+  for (int y = 0; y < height; y++) {
+    for (int xb = 0; xb < widthBytes; xb++) {
+      uint8_t open = 0;
+      for (int bit = 0; bit < 8; bit++) {
+        if (at(xb * 8 + bit, y) & kOpen) open |= 0x80 >> bit;
+      }
+      const size_t i = static_cast<size_t>(y) * widthBytes + xb;
+      fb[i] = (fb[i] & ~open) | (background[i] & open);
+    }
+  }
+}
 }  // namespace
 
 void RaincloudTheme::PsramFree::operator()(uint8_t* ptr) const {
@@ -249,6 +352,32 @@ void RaincloudTheme::pickIndexedBackground(std::string& selectedPath) const {
 }
 
 void RaincloudTheme::drawHomeBackground(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const {
+  outlinePending = false;
+  drawBackgroundLayer(renderer, recentBooks);
+
+  uint8_t* fb = renderer.getFrameBuffer();
+  const size_t fbSize = renderer.getBufferSize();
+  if (!fb || fbSize == 0 || !reservePsram(outlineBackground, outlineBackgroundSize, fbSize) ||
+      !reservePsram(outlineMask, outlineMaskSize, fbSize * 8)) {
+    return;  // no PSRAM: keep the background drawn directly under the UI
+  }
+  memcpy(outlineBackground.get(), fb, fbSize);
+  renderer.clearScreen();
+  outlinePending = true;
+}
+
+void RaincloudTheme::finishHomeScreen(GfxRenderer& renderer) const {
+  if (!outlinePending) return;
+  outlinePending = false;
+  uint8_t* fb = renderer.getFrameBuffer();
+  const int widthBytes = renderer.getDisplayWidthBytes();
+  const size_t fbSize = renderer.getBufferSize();
+  if (!fb || widthBytes <= 0 || fbSize > outlineBackgroundSize || fbSize * 8 > outlineMaskSize) return;
+  composeOutlinedBackground(fb, outlineBackground.get(), outlineMask.get(), widthBytes * 8,
+                            static_cast<int>(fbSize / widthBytes));
+}
+
+void RaincloudTheme::drawBackgroundLayer(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const {
   const RecentBook* book = recentBooks.empty() ? nullptr : &recentBooks.front();
   const bool bookChanged = book ? book->path != backgroundBookPath : !backgroundBookPath.empty();
   const bool coverChanged = book ? book->coverBmpPath != backgroundCoverPath : !backgroundCoverPath.empty();
