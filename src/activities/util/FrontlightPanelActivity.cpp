@@ -157,12 +157,14 @@ void FrontlightPanelActivity::runTile(const int idx) {
       renderer.promoteNextRefresh(HalDisplay::FULL_REFRESH);
       close();
       break;
-    case 2:  // Cycle the reading orientation
-      SETTINGS.orientation = static_cast<uint8_t>((SETTINGS.orientation + 1) % 4);
+    case 2:  // Flip Picco: turn the UI 180 degrees (or back)
+      SETTINGS.uiOrientation = SETTINGS.uiOrientation == 0 ? 1 : 0;
       SETTINGS.saveToFile();
-      // Only the setting changes: turning the renderer cropped the portrait-only
-      // screens the panel opens over. The reader reflows on its next loop().
-      requestUpdate();
+      // The screen underneath repaints turned (ActivityManager applies the
+      // orientation before every render); give that repaint the full waveform
+      // so the old, unturned frame leaves no ghost.
+      renderer.promoteNextRefresh(HalDisplay::FULL_REFRESH);
+      close();
       break;
     case 3:  // Touch reader controls (for reading with the palm on the glass)
       // Toggles the existing Settings -> Controls option, nothing lower-level:
@@ -375,11 +377,9 @@ void FrontlightPanelActivity::buildPanelScreen(UiScreen& screen) {
   // setting is currently on draws filled (StateChecked -> selected style).
   // Touch boards only — the tiles are touch targets.
   if (mappedInput.hasTouch()) {
-    static constexpr StrId kOrientNames[4] = {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW,
-                                              StrId::STR_ORIENTATION_INVERTED, StrId::STR_LANDSCAPE_CCW};
-    // The orientation tile is labelled with just the current mode ("Portrait"):
-    // the mode names say what the tile is about on their own.
-    const char* orientLabel = I18N.get(kOrientNames[SETTINGS.orientation % 4]);
+    // The Flip Picco tile is labelled with the current turn ("Flip Picco: 0°").
+    const char* orientLabel =
+        I18N.get(SETTINGS.uiOrientation == 1 ? StrId::STR_FLIP_PICCO_180 : StrId::STR_FLIP_PICCO_0);
     // "Touch On" / "Touch Off", from the existing state strings: the label
     // names the current state of the touch-reader-controls setting.
     const bool touchOn = SETTINGS.touchReaderControls != CrossPointSettings::TOUCH_READER_OFF;

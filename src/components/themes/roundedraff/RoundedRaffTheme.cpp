@@ -216,7 +216,10 @@ void RoundedRaffTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, 
   }
 
   const GfxRenderer::Orientation origOrientation = renderer.getOrientation();
-  renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+  // A flipped (Flip Picco) screen keeps its hints upside down with it.
+  if (origOrientation != GfxRenderer::Orientation::PortraitInverted) {
+    renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+  }
 
   const int pageWidth = renderer.getScreenWidth();
   const int pageHeight = renderer.getScreenHeight();

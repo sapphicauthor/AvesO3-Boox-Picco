@@ -30,6 +30,28 @@
 
 static portMUX_TYPE activityManagerSpinlock = portMUX_INITIALIZER_UNLOCKED;
 
+// Every non-reader screen is portrait, turned 180 degrees when Flip Picco is on.
+// A reader starts from its own portrait setting; landscape is left for the
+// reader's applyOrientation() so the screen is not turned twice.
+static void applyActivityOrientation(GfxRenderer& renderer, const bool isReader) {
+  if (!isReader) {
+    renderer.setOrientation(SETTINGS.uiOrientation == 1 ? GfxRenderer::Orientation::PortraitInverted
+                                                        : GfxRenderer::Orientation::Portrait);
+    return;
+  }
+  switch (SETTINGS.orientation) {
+    case CrossPointSettings::ORIENTATION::INVERTED:
+      renderer.setOrientation(GfxRenderer::Orientation::PortraitInverted);
+      break;
+    case CrossPointSettings::ORIENTATION::LANDSCAPE_CW:
+    case CrossPointSettings::ORIENTATION::LANDSCAPE_CCW:
+      break;
+    default:
+      renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+      break;
+  }
+}
+
 void ActivityManager::begin() {
 #if defined(configNUM_CORES) && configNUM_CORES > 1
   constexpr BaseType_t renderTaskCore = 1;
@@ -59,6 +81,7 @@ void ActivityManager::renderTaskLoop() {
     RenderLock lock;
     if (currentActivity) {
       HalPowerManager::Lock powerLock;  // Ensure we don't go into low-power mode while rendering
+      applyActivityOrientation(renderer, currentActivity->isReaderActivity());
       // Night mode is a global output polarity applied to every activity.
       // The sleep screen forces normal polarity itself (SleepActivity).
       display.setInverted(SETTINGS.screenInverted != 0);
@@ -186,6 +209,7 @@ void ActivityManager::loop() {
       }
       pendingAction = PendingAction::None;
       currentActivity = std::move(pendingActivity);
+      applyActivityOrientation(renderer, currentActivity->isReaderActivity());
 
       lock.unlock();  // onEnter may acquire its own lock
       currentActivity->onEnter();
@@ -222,6 +246,7 @@ void ActivityManager::replaceActivity(std::unique_ptr<Activity>&& newActivity) {
   } else {
     // No current activity, safe to launch immediately
     currentActivity = std::move(newActivity);
+    applyActivityOrientation(renderer, currentActivity->isReaderActivity());
     currentActivity->onEnter();
   }
 }

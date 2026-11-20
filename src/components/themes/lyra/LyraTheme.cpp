@@ -115,7 +115,10 @@ void LyraTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   }
 
   const GfxRenderer::Orientation orig_orientation = renderer.getOrientation();
-  renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+  // A flipped (Flip Picco) screen keeps its hints upside down with it.
+  if (orig_orientation != GfxRenderer::Orientation::PortraitInverted) {
+    renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+  }
 
   const int pageHeight = renderer.getScreenHeight();
   constexpr int buttonWidth = 80;

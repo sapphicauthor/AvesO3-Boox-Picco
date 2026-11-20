@@ -104,6 +104,8 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
     doc["parentalPin_obf"] = obfuscation::obfuscateToBase64(parentalPin);
   }
   doc["pinLockEnabled"] = pinLockEnabled;
+  // Flip Picco — set from the control center, not in SettingsList.
+  doc["uiOrientation"] = uiOrientation;
 
   // Language -- managed by LanguageSelectActivity, not in SettingsList.
   // Stored as ISO code string ("EN", "DE", ...) for stability across enum reorders.
@@ -185,6 +187,16 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   const uint8_t storedPinLock = doc["pinLockEnabled"] | (uint8_t)0;
   pinLockEnabled = clamp(storedPinLock, (uint8_t)2, (uint8_t)0);
   if (storedPinLock != pinLockEnabled) needsResave = true;
+
+  if (doc["uiOrientation"].isNull()) {
+    // Files from before Flip Picco: keep an upside-down reader upside down in the UI too.
+    uiOrientation = orientation == INVERTED ? 1 : 0;
+    needsResave = true;
+  } else {
+    const uint8_t storedFlip = doc["uiOrientation"] | (uint8_t)0;
+    uiOrientation = clamp(storedFlip, (uint8_t)2, (uint8_t)0);
+    if (storedFlip != uiOrientation) needsResave = true;
+  }
 
   if (doc["sleepTimeoutMinutes"].isNull() && !doc["sleepTimeout"].isNull()) {
     const uint8_t legacyValue =

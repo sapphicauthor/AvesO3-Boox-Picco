@@ -516,7 +516,8 @@ void SleepActivity::onEnter() {
     }
     drawSleepPopupPreservingFrame(renderer);
     if (APP_STATE.lastSleepFromReader) {
-      renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+      renderer.setOrientation(SETTINGS.uiOrientation == 1 ? GfxRenderer::Orientation::PortraitInverted
+                                                          : GfxRenderer::Orientation::Portrait);
     }
     releaseSdFontCachesForDecode(renderer);
     return renderTransparentCustomSleepScreen();
@@ -526,7 +527,8 @@ void SleepActivity::onEnter() {
   if (APP_STATE.lastSleepFromReader) {
     ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
     GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
-    renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+    renderer.setOrientation(SETTINGS.uiOrientation == 1 ? GfxRenderer::Orientation::PortraitInverted
+                                                        : GfxRenderer::Orientation::Portrait);
   } else {
     GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
   }
