@@ -18,7 +18,9 @@
 
 namespace {
 constexpr int kBackgroundCoverHeight = 226;
-constexpr float kBackgroundStrengthPercent = 60.0f;
+// How much of the image's darkness the background keeps: 100 draws it at full
+// grayscale, lower values lighten it toward white.
+constexpr float kBackgroundStrengthPercent = 100.0f;
 constexpr size_t kMaxBackgroundFileNameLen = 256;
 
 constexpr uint8_t kBayer4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
@@ -35,7 +37,7 @@ constexpr uint8_t bwThreshold(const unsigned level) {
 }
 // Gray modes: the 2-bit shade the level is lightened to (rounded half up).
 constexpr uint8_t grayShade(const unsigned level) {
-  const float value = level * kBackgroundStrengthPercent / 100.0f + 1.2f;
+  const float value = 3.0f - static_cast<float>(3 - static_cast<int>(level)) * kBackgroundStrengthPercent / 100.0f;
   int rounded = static_cast<int>(value);
   if (value - rounded >= 0.5f) rounded++;
   return static_cast<uint8_t>(rounded);
@@ -46,7 +48,7 @@ constexpr uint8_t kGrayShade[4] = {grayShade(0), grayShade(1), grayShade(2), gra
 }  // namespace
 
 // Draw one background pixel. level is the image's 2-bit gray (0 = black,
-// 3 = white), lightened to kBackgroundStrengthPercent of its darkness.
+// 3 = white), keeping kBackgroundStrengthPercent of its darkness.
 void plotBackgroundPixel(const GfxRenderer& renderer, const int x, const int y, const unsigned level,
                          const int renderMode) {
   if (renderMode == GfxRenderer::BW) {

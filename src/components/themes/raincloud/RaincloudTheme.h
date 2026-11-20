@@ -10,7 +10,7 @@
 class GfxRenderer;
 
 // Lyra with a home-screen background: the current book's cover, otherwise a
-// random image from the sleep folder, drawn lightened behind the home screen.
+// random image from the sleep folder, drawn in grayscale behind the home screen.
 // The decoded background is cached in PSRAM so redraws skip the SD card.
 class RaincloudTheme : public LyraTheme {
  public:
