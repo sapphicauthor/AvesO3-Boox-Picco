@@ -49,7 +49,8 @@ class RaincloudTheme : public LyraTheme {
   // Home outline: drawHomeBackground keeps a copy of the drawn background (raw
   // framebuffer bytes) and clears the screen; finishHomeScreen lays it back in
   // only where it stays clear of the home UI. Both buffers live in PSRAM and are
-  // reused; without them the background is simply drawn under the UI.
+  // reused (outlineMask is the 3-plane scratch of the compositor); without them
+  // the background is simply drawn under the UI.
   mutable std::unique_ptr<uint8_t[], PsramFree> outlineBackground;
   mutable std::unique_ptr<uint8_t[], PsramFree> outlineMask;
   mutable size_t outlineBackgroundSize = 0;

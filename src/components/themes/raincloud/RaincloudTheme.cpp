@@ -221,98 +221,136 @@ bool reservePsram(Buffer& buf, size_t& capacity, const size_t needed) {
   return static_cast<bool>(buf);
 }
 
-// Per-pixel flags of the outline mask.
-constexpr uint8_t kInk = 1;     // the UI drew a black pixel here
-constexpr uint8_t kRow = 2;     // ink within 1 px on the same row
-constexpr uint8_t kSquare = 4;  // ink within the 3x3 square
-constexpr uint8_t kHalo = 8;    // ink within the radius-2 octagon: kept white
-constexpr uint8_t kOpen = 16;   // reachable from the screen edge without crossing a halo
+// Pixel rows are packed 8 per byte, most significant bit = leftmost pixel.
+// Shift a packed row by one pixel: shiftedFromRight[x] = row[x + 1],
+// shiftedFromLeft[x] = row[x - 1] (zero at the ends).
+uint8_t fromRight(const uint8_t* row, const int b, const int widthBytes) {
+  return static_cast<uint8_t>((row[b] << 1) | (b + 1 < widthBytes ? row[b + 1] >> 7 : 0));
+}
+uint8_t fromLeft(const uint8_t* row, const int b) {
+  return static_cast<uint8_t>((row[b] >> 1) | (b > 0 ? row[b - 1] << 7 : 0));
+}
+
+// Bits [from, to) of a packed row.
+uint8_t runMask(const int b, const int from, const int to) {
+  const int lo = b * 8;
+  const int s = from > lo ? from - lo : 0;
+  const int e = to < lo + 8 ? to - lo : 8;
+  return static_cast<uint8_t>((0xFF >> s) & (0xFF << (8 - e)));
+}
+bool anyInRun(const uint8_t* row, const int from, const int to) {
+  for (int b = from / 8; b <= (to - 1) / 8; b++) {
+    if (row[b] & runMask(b, from, to)) return true;
+  }
+  return false;
+}
+void setRun(uint8_t* row, const int from, const int to) {
+  for (int b = from / 8; b <= (to - 1) / 8; b++) row[b] |= runMask(b, from, to);
+}
+
+// Open the free runs of row y that touch the screen edge, or touch an open pixel
+// directly above/below (neighbor row) or already in this row. True if any changed.
+bool openRow(const uint8_t* halo, uint8_t* open, const uint8_t* neighbor, const int y, const int width,
+             const int height, const int widthBytes) {
+  const uint8_t* h = halo + static_cast<size_t>(y) * widthBytes;
+  uint8_t* o = open + static_cast<size_t>(y) * widthBytes;
+  const bool edgeRow = y == 0 || y == height - 1;
+  bool changed = false;
+  int x = 0;
+  while (x < width) {
+    // skip halo pixels (whole bytes at a time when possible)
+    if ((x & 7) == 0 && h[x / 8] == 0xFF) {
+      x += 8;
+      continue;
+    }
+    if (h[x / 8] & (0x80 >> (x & 7))) {
+      x++;
+      continue;
+    }
+    int end = x + 1;
+    while (end < width) {
+      if ((end & 7) == 0 && h[end / 8] == 0x00) {
+        end += 8;
+        continue;
+      }
+      if (h[end / 8] & (0x80 >> (end & 7))) break;
+      end++;
+    }
+    if (end > width) end = width;
+    const bool reach =
+        edgeRow || x == 0 || end == width || anyInRun(o, x, end) || (neighbor && anyInRun(neighbor, x, end));
+    if (reach) {
+      // only report a change when some bit in the run was still closed
+      for (int b = x / 8; b <= (end - 1) / 8; b++) {
+        const uint8_t m = runMask(b, x, end);
+        if ((o[b] & m) != m) {
+          changed = true;
+          o[b] |= m;
+        }
+      }
+    }
+    x = end;
+  }
+  return changed;
+}
 
 // Lay the background back in around a UI drawn on white: every UI pixel keeps
-// a 2 px white outline, and areas the UI encloses (covers, boxes, the holes of
-// letters) stay white, so only the open space around the UI shows the image.
-// fb and background are raw framebuffers (physical rows, 1 bit per pixel,
-// 0 = black); mask holds one flag byte per pixel. Works in physical space, so
-// it is the same for every orientation.
-void composeOutlinedBackground(uint8_t* fb, const uint8_t* background, uint8_t* mask, const int width,
+// a 2 px white outline (radius-2 octagon), and areas the UI encloses (covers,
+// boxes, the holes of letters) stay white, so only the open space around the UI
+// shows the image. fb and background are raw framebuffers (physical rows, 1 bit
+// per pixel, MSB = leftmost, 0 = black). Works in physical space, so it is the
+// same for every orientation. Bit-parallel: the outline grows 8 pixels per byte
+// operation and the open space is flooded run by run with alternating sweeps.
+// scratch must hold 3 * widthBytes * height bytes.
+void composeOutlinedBackground(uint8_t* fb, const uint8_t* background, uint8_t* scratch, const int width,
                                const int height) {
-  const int widthBytes = width / 8;
-  const auto at = [mask, width](const int x, const int y) -> uint8_t& { return mask[y * width + x]; };
+  const int wb = width / 8;
+  const size_t plane = static_cast<size_t>(wb) * height;
+  uint8_t* row = scratch;               // ink grown along rows, then the 3x3 square
+  uint8_t* halo = scratch + plane;      // radius-2 octagon around the ink
+  uint8_t* open = scratch + 2 * plane;  // open space reachable from the edge
 
-  for (int y = 0; y < height; y++) {
-    for (int xb = 0; xb < widthBytes; xb++) {
-      const uint8_t bits = fb[y * widthBytes + xb];
-      for (int bit = 0; bit < 8; bit++) {
-        at(xb * 8 + bit, y) = (bits & (0x80 >> bit)) ? 0 : kInk;
-      }
+  for (int y = 0; y < height; y++) {  // ink = black pixels; grow 1 px left/right
+    const uint8_t* f = fb + static_cast<size_t>(y) * wb;
+    uint8_t* r = row + static_cast<size_t>(y) * wb;
+    for (int b = 0; b < wb; b++) {
+      const uint8_t ink = static_cast<uint8_t>(~f[b]);
+      const uint8_t inkR = static_cast<uint8_t>((ink << 1) | (b + 1 < wb ? static_cast<uint8_t>(~f[b + 1]) >> 7 : 0));
+      const uint8_t inkL = static_cast<uint8_t>((ink >> 1) | (b > 0 ? static_cast<uint8_t>(~f[b - 1]) << 7 : 0));
+      r[b] = ink | inkR | inkL;
     }
   }
-
-  // Radius-2 octagon = 3x3 square, then a plus: rows, columns, then the plus.
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      if ((at(x, y) & kInk) || (x > 0 && (at(x - 1, y) & kInk)) || (x + 1 < width && (at(x + 1, y) & kInk))) {
-        at(x, y) |= kRow;
-      }
+  for (int y = 0; y < height; y++) {  // 3x3 square (into halo temporarily)
+    const uint8_t* r = row + static_cast<size_t>(y) * wb;
+    uint8_t* s = halo + static_cast<size_t>(y) * wb;
+    for (int b = 0; b < wb; b++) {
+      s[b] = r[b] | (y > 0 ? r[b - wb] : 0) | (y + 1 < height ? r[b + wb] : 0);
     }
   }
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      if ((at(x, y) & kRow) || (y > 0 && (at(x, y - 1) & kRow)) || (y + 1 < height && (at(x, y + 1) & kRow))) {
-        at(x, y) |= kSquare;
-      }
-    }
-  }
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      if ((at(x, y) & kSquare) || (x > 0 && (at(x - 1, y) & kSquare)) || (x + 1 < width && (at(x + 1, y) & kSquare)) ||
-          (y > 0 && (at(x, y - 1) & kSquare)) || (y + 1 < height && (at(x, y + 1) & kSquare))) {
-        at(x, y) |= kHalo;
-      }
+  memcpy(row, halo, plane);           // row now holds the square
+  for (int y = 0; y < height; y++) {  // plus around the square = octagon
+    const uint8_t* s = row + static_cast<size_t>(y) * wb;
+    uint8_t* h = halo + static_cast<size_t>(y) * wb;
+    for (int b = 0; b < wb; b++) {
+      h[b] = s[b] | fromRight(s, b, wb) | fromLeft(s, b) | (y > 0 ? s[b - wb] : 0) | (y + 1 < height ? s[b + wb] : 0);
     }
   }
 
-  // Open space: flood from the screen edge with alternating sweeps (no stack),
-  // stopping once a pair of sweeps changes nothing.
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      if ((y == 0 || x == 0 || y == height - 1 || x == width - 1) && !(at(x, y) & kHalo)) at(x, y) |= kOpen;
-    }
-  }
+  memset(open, 0, plane);
   constexpr int kMaxSweeps = 64;
   for (int sweep = 0; sweep < kMaxSweeps; sweep++) {
     bool changed = false;
-    for (int y = 1; y < height; y++) {
-      for (int x = 1; x < width; x++) {
-        uint8_t& f = at(x, y);
-        if (!(f & (kHalo | kOpen)) && ((at(x - 1, y) & kOpen) || (at(x, y - 1) & kOpen))) {
-          f |= kOpen;
-          changed = true;
-        }
-      }
+    for (int y = 0; y < height; y++) {
+      changed |= openRow(halo, open, y > 0 ? open + static_cast<size_t>(y - 1) * wb : nullptr, y, width, height, wb);
     }
-    for (int y = height - 2; y >= 0; y--) {
-      for (int x = width - 2; x >= 0; x--) {
-        uint8_t& f = at(x, y);
-        if (!(f & (kHalo | kOpen)) && ((at(x + 1, y) & kOpen) || (at(x, y + 1) & kOpen))) {
-          f |= kOpen;
-          changed = true;
-        }
-      }
+    for (int y = height - 1; y >= 0; y--) {
+      changed |=
+          openRow(halo, open, y + 1 < height ? open + static_cast<size_t>(y + 1) * wb : nullptr, y, width, height, wb);
     }
     if (!changed) break;
   }
 
-  for (int y = 0; y < height; y++) {
-    for (int xb = 0; xb < widthBytes; xb++) {
-      uint8_t open = 0;
-      for (int bit = 0; bit < 8; bit++) {
-        if (at(xb * 8 + bit, y) & kOpen) open |= 0x80 >> bit;
-      }
-      const size_t i = static_cast<size_t>(y) * widthBytes + xb;
-      fb[i] = (fb[i] & ~open) | (background[i] & open);
-    }
-  }
+  for (size_t i = 0; i < plane; i++) fb[i] = (fb[i] & ~open[i]) | (background[i] & open[i]);
 }
 }  // namespace
 
@@ -358,7 +396,7 @@ void RaincloudTheme::drawHomeBackground(GfxRenderer& renderer, const std::vector
   uint8_t* fb = renderer.getFrameBuffer();
   const size_t fbSize = renderer.getBufferSize();
   if (!fb || fbSize == 0 || !reservePsram(outlineBackground, outlineBackgroundSize, fbSize) ||
-      !reservePsram(outlineMask, outlineMaskSize, fbSize * 8)) {
+      !reservePsram(outlineMask, outlineMaskSize, fbSize * 3)) {
     return;  // no PSRAM: keep the background drawn directly under the UI
   }
   memcpy(outlineBackground.get(), fb, fbSize);
@@ -372,7 +410,7 @@ void RaincloudTheme::finishHomeScreen(GfxRenderer& renderer) const {
   uint8_t* fb = renderer.getFrameBuffer();
   const int widthBytes = renderer.getDisplayWidthBytes();
   const size_t fbSize = renderer.getBufferSize();
-  if (!fb || widthBytes <= 0 || fbSize > outlineBackgroundSize || fbSize * 8 > outlineMaskSize) return;
+  if (!fb || widthBytes <= 0 || fbSize > outlineBackgroundSize || fbSize * 3 > outlineMaskSize) return;
   composeOutlinedBackground(fb, outlineBackground.get(), outlineMask.get(), widthBytes * 8,
                             static_cast<int>(fbSize / widthBytes));
 }
