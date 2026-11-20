@@ -290,11 +290,11 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
                       tileY + hPaddingInSelection + LyraMetrics::values.homeCoverHeight / 3, coverWidth,
                       2 * LyraMetrics::values.homeCoverHeight / 3);
         }
+      }
 
       coverBufferStored = storeCoverBuffer();
       coverRendered = coverBufferStored;  // Only consider it rendered if we successfully stored the buffer
     }
-  }
     bool bookSelected = (selectorIndex == 0);
 
     int tileX = LyraMetrics::values.contentSidePadding;
