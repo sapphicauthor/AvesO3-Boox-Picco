@@ -346,7 +346,7 @@ void Ao3IndexActivity::tickSingleScraping() {
   LOG_INF("AO3I", "single pre  maxAlloc=%u free=%u", (unsigned)ESP.getMaxAllocHeap(),
         (unsigned)ESP.getFreeHeap());
   Epub epub(targetPath, "/.crosspoint");
-  if (!epub.load(true, true, true)) {
+  if (!epub.load(true, true, true, false)) {
     state = State::ERROR;
     errorMessage = "Failed to load epub file structure.";
     requestUpdate(true);
@@ -532,17 +532,6 @@ void Ao3IndexActivity::startDirIndexing() {
 }
 
 void Ao3IndexActivity::tickDirIndexing() {
-  {
-  const uint32_t blk = ESP.getMaxAllocHeap();
-  if (blk < MIN_BLOCK_DIR) {
-    gateBlockKb_ = blk / 1024;
-    state = State::ERROR;
-    errorMessage = "Not enough memory. Please restart the device.";
-    requestUpdate(true);
-    return;
-  }
-}
-
   // Batch exhausted. If we got fewer books than requested, this was the last batch.
   // Otherwise there may be more unindexed books — show the batch complete prompt.
   if (currentBookIndex >= pendingBooks.size()) {
@@ -565,13 +554,32 @@ void Ao3IndexActivity::tickDirIndexing() {
   // Move the path out and immediately free its heap buffer.
   std::string filePath = std::move(pendingBooks[currentBookIndex]);
   pendingBooks[currentBookIndex].shrink_to_fit();
+
+  // Too little contiguous heap to parse this book safely: record it as failed and
+  // move on to the next one instead of stopping the whole batch.
+  const uint32_t largestBlock = ESP.getMaxAllocHeap();
+  const uint32_t freeHeap = ESP.getFreeHeap();
+  if (largestBlock < MIN_BLOCK_DIR) {
+    LOG_ERR("AO3I", "Skipping %s: low heap before indexing (largest=%u free=%u)", filePath.c_str(),
+            (unsigned)largestBlock, (unsigned)freeHeap);
+    failureCount++;
+    failedHashes.push_back(static_cast<uint32_t>(std::hash<std::string>{}(filePath)));
+    if (failedBooks.size() < 10) failedBooks.push_back(filePath);
+    currentBookIndex++;
+    requestUpdate(true);
+    return;
+  }
+  // Reserve the failure records now, while the heap is known to be healthy, so
+  // recording a failure after a heavy book never needs a fresh allocation.
+  failedHashes.reserve(failedHashes.size() + pendingBooks.size() - currentBookIndex);
+  failedBooks.reserve(10);
 LOG_INF("AO3I", "pre  #%u maxAlloc=%u free=%u", (unsigned)currentBookIndex,
-        (unsigned)ESP.getMaxAllocHeap(), (unsigned)ESP.getFreeHeap());
+        (unsigned)largestBlock, (unsigned)freeHeap);
 
 bool indexedOk = false;
 {
   Epub epub(filePath, "/.crosspoint");
-  if (epub.load(true, true, true)) {
+  if (epub.load(true, true, true, false)) {
     currentBookTitle = epub.getTitle();
     indexedOk = Ao3Librarian::scrape(epub, /*force=*/true);
   }
