@@ -33,6 +33,7 @@
 #include "components/UIThemeTokens.h"
 #include "components/UiAppHelpers.h"
 #include "fontIds.h"
+#include "util/SlideSwitch.h"
 
 namespace fui = freeink::ui;
 
@@ -56,6 +57,14 @@ void SettingsActivity::rebuildSettingsLists() {
 
   for (auto& setting : getSettingsList(&sdFontSystem.registry(), &dictionaries)) {
     if (setting.category == StrId::STR_NONE_OPT) continue;
+    // The slide switch's position owns its bound function; no second toggle.
+    if ((setting.valuePtr == &CrossPointSettings::frontlightRestoreOnWake && slideSwitchOwnsLight()) ||
+        (setting.valuePtr == &CrossPointSettings::screenInverted &&
+         slideSwitchOwns(CrossPointSettings::SLIDE_SWITCH_NIGHT_MODE)) ||
+        (setting.valuePtr == &CrossPointSettings::touchReaderControls &&
+         slideSwitchOwns(CrossPointSettings::SLIDE_SWITCH_TOUCH_READER_CONTROLS))) {
+      continue;
+    }
     if (setting.category == StrId::STR_CAT_DISPLAY) {
       // The sunlight fading fix is a grayscale-waveform compensation that does
       // not apply on the X4 Pro / X4 Classic (plain OTP waveform, same panels).

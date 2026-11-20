@@ -44,6 +44,7 @@
 #include "images/LoadingIcon.h"
 #include "platform/UsbSerialJtagHandoff.h"
 #include "util/SdContentEpoch.h"
+#include "util/SlideSwitch.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
 
@@ -505,11 +506,9 @@ void setup() {
   // reboots preserve the live state so they do not unexpectedly go dark.
   // When the slide switch controls the light, its position wins over the
   // restore rule.
-  const bool switchDrivesLight =
-      gpio.hasToggleSwitch() && SETTINGS.slideSwitchAction == CrossPointSettings::SLIDE_SWITCH_FRONTLIGHT;
   const bool restoreLightOn =
-      switchDrivesLight ? gpio.isToggleSwitchOn()
-                        : SETTINGS.frontlightOn != 0 && (SETTINGS.frontlightRestoreOnWake != 0 || isSilentReboot);
+      slideSwitchOwnsLight() ? gpio.isToggleSwitchOn()
+                             : SETTINGS.frontlightOn != 0 && (SETTINGS.frontlightRestoreOnWake != 0 || isSilentReboot);
   Frontlight.begin(SETTINGS.frontlightBrightness, SETTINGS.frontlightWarmth, restoreLightOn);
 
   switch (wakeupReason) {

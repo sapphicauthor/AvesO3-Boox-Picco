@@ -16,6 +16,7 @@
 #include "components/UIThemeTokens.h"
 #include "components/icons/customListIcons.h"
 #include "components/icons/listIcons.h"
+#include "util/SlideSwitch.h"
 
 namespace fui = freeink::ui;
 
@@ -110,7 +111,7 @@ void FrontlightPanelActivity::onBrightnessEvent(const fui::ActionEvent& event, v
   if (event.dragPermille < 0) return;
   self->brightness = std::max(MIN_BRIGHTNESS, percentFromPermille(event.dragPermille));
   Frontlight.setBrightness(self->brightness);
-  if (!self->lightOn) {
+  if (!self->lightOn && !slideSwitchOwnsLight()) {
     self->lightOn = true;
     self->lightOnChanged = true;
     Frontlight.setOn(true);
@@ -125,7 +126,7 @@ void FrontlightPanelActivity::onWarmthEvent(const fui::ActionEvent& event, void*
 }
 
 void FrontlightPanelActivity::onToggleEvent(const fui::ActionEvent&, void* user) {
-  static_cast<FrontlightPanelActivity*>(user)->toggleLight();
+  if (!slideSwitchOwnsLight()) static_cast<FrontlightPanelActivity*>(user)->toggleLight();
 }
 
 void FrontlightPanelActivity::onBrightnessStepEvent(const fui::ActionEvent& event, void* user) {
@@ -143,6 +144,8 @@ void FrontlightPanelActivity::onTileEvent(const fui::ActionEvent& event, void* u
 void FrontlightPanelActivity::runTile(const int idx) {
   switch (idx) {
     case 0:  // Night mode (inverted output polarity, applied to the whole UI)
+      // A tile whose function the slide switch owns shows its state but takes no tap.
+      if (slideSwitchOwns(CrossPointSettings::SLIDE_SWITCH_NIGHT_MODE)) return;
       SETTINGS.screenInverted = SETTINGS.screenInverted ? 0 : 1;
       SETTINGS.saveToFile();
       // Inversion rewrites every pixel; take the clean waveform so the panel
@@ -167,6 +170,7 @@ void FrontlightPanelActivity::runTile(const int idx) {
       close();
       break;
     case 3:  // Touch reader controls (for reading with the palm on the glass)
+      if (slideSwitchOwns(CrossPointSettings::SLIDE_SWITCH_TOUCH_READER_CONTROLS)) return;
       // Toggles the existing Settings -> Controls option, nothing lower-level:
       // that setting only governs the reader's tap/swipe handling, so the
       // panel's own gestures (including the swipe that reopens it) keep
@@ -193,7 +197,7 @@ void FrontlightPanelActivity::adjustBrightness(const int delta) {
   if (next == brightness) return;
   brightness = static_cast<uint8_t>(next);
   Frontlight.setBrightness(brightness);
-  if (!lightOn) {
+  if (!lightOn && !slideSwitchOwnsLight()) {
     lightOn = true;
     lightOnChanged = true;
     Frontlight.setOn(true);
@@ -259,7 +263,7 @@ void FrontlightPanelActivity::loop() {
     return;
   }
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    toggleLight();
+    if (!slideSwitchOwnsLight()) toggleLight();
     return;
   }
 
@@ -366,7 +370,7 @@ void FrontlightPanelActivity::buildPanelScreen(UiScreen& screen) {
 
   if (Frontlight.present()) {
     addSliderRow(screen, tr(STR_BRIGHTNESS), brightness, ACTION_BRIGHTNESS, ACTION_BRIGHTNESS_STEP,
-                 /*showToggle=*/true);
+                 /*showToggle=*/!slideSwitchOwnsLight());
     if (Frontlight.hasColorTemperature()) {
       addSliderRow(screen, tr(STR_WARMTH), warmth, ACTION_WARMTH, ACTION_WARMTH_STEP, /*showToggle=*/false);
     }
