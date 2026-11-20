@@ -36,4 +36,14 @@ class RaincloudTheme : public LyraTheme {
   mutable int cachedHeight = 0;
   mutable int cachedOrientation = -1;
   mutable bool psramUnavailableLogged = false;
+  // Usable random backgrounds from the last folder scan: the folder and the
+  // file names, each followed by '\0'. Scanned once per boot and again only
+  // when the SD content epoch moves (USB, file transfer) or a listed file fails.
+  mutable std::string backgroundIndexDir;
+  mutable std::string backgroundIndexNames;
+  mutable uint16_t backgroundIndexCount = 0;
+  mutable bool backgroundIndexValid = false;
+  mutable uint32_t backgroundIndexEpoch = 0;
+
+  void pickIndexedBackground(std::string& selectedPath) const;
 };

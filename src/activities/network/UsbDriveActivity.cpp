@@ -7,6 +7,7 @@
 #include "MappedInputManager.h"
 #include "SilentRestart.h"
 #include "components/UITheme.h"
+#include "util/SdContentEpoch.h"
 
 namespace fui = freeink::ui;
 
@@ -34,6 +35,7 @@ void UsbDriveActivity::onEnter() {
 }
 
 void UsbDriveActivity::onExit() {
+  SdContentEpoch::markChanged();  // files may have been added or removed
   if (!restartRequested) Storage.endUsbDrive();
   Activity::onExit();
 }

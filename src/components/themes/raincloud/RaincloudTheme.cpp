@@ -14,6 +14,7 @@
 
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
+#include "util/SdContentEpoch.h"
 
 namespace {
 constexpr int kBackgroundCoverHeight = 226;
@@ -79,9 +80,13 @@ bool isUsableBackground(HalFile& file, const char* name) {
   return isValidBmp(file);
 }
 
-bool pickRandomBackground(const char* dirPath, std::string& selectedPath) {
+// Append every usable background in dirPath to names ('\0'-terminated each).
+// Returns false only when the filename buffer cannot be allocated.
+bool scanBackgroundFolder(const char* dirPath, std::string& names, uint16_t& count) {
+  names.clear();
+  count = 0;
   auto dir = Storage.open(dirPath);
-  if (!dir || !dir.isDirectory()) return false;
+  if (!dir || !dir.isDirectory()) return true;
 
   auto name = makeUniqueNoThrow<char[]>(kMaxBackgroundFileNameLen);
   if (!name) {
@@ -89,24 +94,16 @@ bool pickRandomBackground(const char* dirPath, std::string& selectedPath) {
     return false;
   }
 
-  // One pass with reservoir sampling: the n-th usable file replaces the pick
-  // with probability 1/n, which leaves every file equally likely without a
-  // second directory scan (each scan parses every BMP header from the SD card).
-  uint16_t fileCount = 0;
-  while (fileCount < UINT16_MAX) {
+  while (count < UINT16_MAX) {
     auto file = dir.openNextFile();
     if (!file) break;
     file.getName(name.get(), kMaxBackgroundFileNameLen);
     if (!isUsableBackground(file, name.get())) continue;
-    fileCount++;
-    if (random(fileCount) == 0) {
-      selectedPath.reserve(strlen(dirPath) + strlen(name.get()) + 1);
-      selectedPath = dirPath;
-      selectedPath += "/";
-      selectedPath += name.get();
-    }
+    names.append(name.get());
+    names.push_back('\0');
+    count++;
   }
-  return fileCount > 0;
+  return true;
 }
 
 // Draw a BMP scaled to cover the screen (centre crop). When cache is set, the
@@ -227,6 +224,28 @@ void RaincloudTheme::fillSelectionBackground(const GfxRenderer& renderer, int x,
   renderer.fillRectDitherBlend(x, y, width, height, Color::LightGray, 50);
 }
 
+void RaincloudTheme::pickIndexedBackground(std::string& selectedPath) const {
+  const uint32_t epoch = SdContentEpoch::current();
+  if (!backgroundIndexValid || backgroundIndexEpoch != epoch) {
+    backgroundIndexEpoch = epoch;
+    backgroundIndexDir = "/.sleep";
+    backgroundIndexValid = scanBackgroundFolder("/.sleep", backgroundIndexNames, backgroundIndexCount);
+    if (backgroundIndexValid && backgroundIndexCount == 0) {
+      backgroundIndexDir = "/sleep";
+      backgroundIndexValid = scanBackgroundFolder("/sleep", backgroundIndexNames, backgroundIndexCount);
+    }
+  }
+  if (backgroundIndexCount == 0) return;
+
+  const auto target = static_cast<uint16_t>(random(backgroundIndexCount));
+  const char* name = backgroundIndexNames.c_str();
+  for (uint16_t i = 0; i < target; i++) name += strlen(name) + 1;
+  selectedPath.reserve(backgroundIndexDir.size() + strlen(name) + 1);
+  selectedPath = backgroundIndexDir;
+  selectedPath += "/";
+  selectedPath += name;
+}
+
 void RaincloudTheme::drawHomeBackground(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const {
   const RecentBook* book = recentBooks.empty() ? nullptr : &recentBooks.front();
   const bool bookChanged = book ? book->path != backgroundBookPath : !backgroundBookPath.empty();
@@ -288,15 +307,15 @@ void RaincloudTheme::drawHomeBackground(GfxRenderer& renderer, const std::vector
 
   if (!randomBackgroundPicked) {
     randomBackgroundPicked = true;
-    if (!pickRandomBackground("/.sleep", randomBackgroundPath)) {
-      pickRandomBackground("/sleep", randomBackgroundPath);
-    }
+    pickIndexedBackground(randomBackgroundPath);
   }
   if (!randomBackgroundPath.empty() && drawCachedOrLoad(randomBackgroundPath)) return;
   if (!randomBackgroundPath.empty()) {
-    // Drawing failed part-way: start clean and do not retry this file.
+    // Drawing failed part-way: start clean, do not retry this file, and rescan
+    // the folder next time (the file may have been removed or replaced).
     renderer.clearScreen();
     randomBackgroundPath.clear();
+    backgroundIndexValid = false;
   }
 
   cachedPath.clear();

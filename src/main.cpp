@@ -43,6 +43,7 @@
 #include "fontIds.h"
 #include "images/LoadingIcon.h"
 #include "platform/UsbSerialJtagHandoff.h"
+#include "util/SdContentEpoch.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
 
@@ -837,7 +838,10 @@ void loop() {
   // flash, the AA pass re-running, and a frontlight dip under the refresh
   // load); the reader's status bar picks the charging state up on the next
   // page turn instead.
-  if (gpio.wasUsbStateChanged() && !activityManager.isReaderActivity()) {
+  const bool usbStateChanged = gpio.wasUsbStateChanged();
+  // A computer may have changed the card's files while plugged in.
+  if (usbStateChanged) SdContentEpoch::markChanged();
+  if (usbStateChanged && !activityManager.isReaderActivity()) {
     activityManager.requestUpdate();
   }
 

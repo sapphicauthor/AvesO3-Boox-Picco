@@ -21,6 +21,7 @@
 
 #include "activities/home/Ao3LibraryActivity.h"
 #include "activities/network/Ao3ReceiveActivity.h"
+#include "util/SdContentEpoch.h"
 
 namespace {
 // AP Mode configuration
@@ -101,6 +102,7 @@ void CrossPointWebServerActivity::onEnter() {
 }
 
 void CrossPointWebServerActivity::onExit() {
+  SdContentEpoch::markChanged();  // files may have been added or removed
   Activity::onExit();
 
   LOG_DBG("WEBACT", "Free heap at onExit start: %d bytes", ESP.getFreeHeap());
