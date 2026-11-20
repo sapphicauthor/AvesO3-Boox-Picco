@@ -547,6 +547,10 @@ void setup() {
 
   LOG_DBG("MAIN", "Starting CrossPoint version " CROSSPOINT_VERSION);
 
+  // Apply the slide switch position before the first screen is drawn, so boot
+  // never shows a state the switch is about to undo.
+  handleSlideSwitch();
+
   // Resolve the single boot-presentation decision. Skipping the splash also
   // skips the panel-clearing pass and the X3 initial-full-sync arming (see
   // HalDisplay::begin), so the first paint is FAST_REFRESH (~500ms) over the
