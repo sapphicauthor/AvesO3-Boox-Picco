@@ -23,25 +23,12 @@
 #include "fontIds.h"
 #include "../../Ao3Librarian.h"
 
-namespace {
-// Distance from the bottom of the content area (above the button-hint band)
-// to the top of the touch-only page dots. Shared by render() and loop().
-constexpr int kPageDotsFromBottom = 38;
-}  // namespace
-
 int HomeActivity::getMenuItemCount() const {
   const auto& metrics = UITheme::getInstance().getMetrics();
-  int menuItems = 0;
-  if (menuPage == 0) {
-    menuItems = 5;
-    if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
-      menuItems += 1;  // Continue Reading occupies slot 0; no separate book section
-    }
-  } else {
-    menuItems = getPage1ItemCount();
-    if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
-      menuItems += 1;  // Continue Reading is also prepended on page 1
-    }
+  int menuItems = 5;
+  if (hasOpdsServers) menuItems += 1;
+  if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
+    menuItems += 1;  // Continue Reading occupies slot 0; no separate book section
   }
   // When Continue Reading is embedded in the menu there is no separate book
   // section, so do not add recentBooks.size() again.
@@ -49,13 +36,6 @@ int HomeActivity::getMenuItemCount() const {
     return menuItems;
   }
   return menuItems + static_cast<int>(recentBooks.size());
-}
-
-int HomeActivity::getPage1ItemCount() const {
-  int count = 0;
-  if (hasOpdsServers) count++;
-  // future page-1 entries go here
-  return count;
 }
 
 void HomeActivity::loadRecentBooks(int maxBooks) {
@@ -161,7 +141,6 @@ void HomeActivity::onEnter() {
 
   // hasOpdsServers = OPDS_STORE.hasServers();
   hasOpdsServers = true;
-  menuPage = 0; // Reset to first menu page
 
   hasAo3Library = true; 
 
@@ -240,21 +219,6 @@ void HomeActivity::loop() {
 
     const int menuIndex = selectorIndex - static_cast<int>(recentBooks.size());
 
-    if (menuPage == 1) {
-      // NOTE: selectorIndex=0 (Continue Reading) is already caught by the
-      // early-return above (selectorIndex < recentBooks.size()). Do NOT prepend
-      // it here — that would shift OPDS Browser to index 1 while menuIndex for
-      // selectorIndex=1 computes to 0, causing OPDS to open the book instead.
-      std::vector<std::function<void()>> page1Actions;
-      if (hasOpdsServers) page1Actions.push_back([this] { onOpdsBrowserOpen(); });
-      // future page-1 entries go here
-      if (menuIndex >= 0 && menuIndex < static_cast<int>(page1Actions.size())) {
-        page1Actions[menuIndex]();
-      }
-      return;
-    }
-
-    // Page 0
     std::vector<std::function<void()>> page0Actions = {
       [this] { onAo3LibraryOpen(); },
       [this] { onRecentsOpen(); },
@@ -262,6 +226,7 @@ void HomeActivity::loop() {
       [this] { onFileTransferOpen(); },
       [this] { onSettingsOpen(); }
     };
+    if (hasOpdsServers) page0Actions.push_back([this] { onOpdsBrowserOpen(); });
 
     // NOTE: when homeContinueReadingInMenu is true, selectorIndex=0 is already
     // handled by the early-return above (selectorIndex < recentBooks.size()).
@@ -387,29 +352,9 @@ void HomeActivity::loop() {
     return;
   }
 
-  // Touch menu paging. Additive: the Back handler below is unchanged, so the
-  // physical buttons behave exactly as before. Swipe left -> page 2, swipe
-  // right -> page 1. Horizontal swipes are always consumed here so that a
-  // left-edge swipe (which the input manager folds into Button::Back) cannot
-  // fall through and pin a book or switch the page a second time.
-  auto switchPage = [this, &metrics](const int target) {
-    if (target == menuPage || (target == 1 && getPage1ItemCount() == 0)) return;
-    menuPage = target;
-    selectorIndex = (metrics.homeContinueReadingInMenu && !recentBooks.empty())
-                        ? 0
-                        : static_cast<int>(recentBooks.size());
-    requestUpdate();
-  };
+  // Horizontal swipes are consumed here so that a left-edge swipe (which the
+  // input manager folds into Button::Back) cannot fall through and pin a book.
   if (swipe == MappedInputManager::SwipeDir::Left || swipe == MappedInputManager::SwipeDir::Right) {
-    switchPage(swipe == MappedInputManager::SwipeDir::Left ? 1 : 0);
-    return;
-  }
-  // Tapping the page dots toggles the page.
-  if (mappedInput.hasTouch() && getPage1ItemCount() > 0 &&
-      mappedInput.wasTapInRect(
-          0, renderer.getScreenHeight() - metrics.buttonHintsHeight - kPageDotsFromBottom - 14,
-          renderer.getScreenWidth(), 40)) {
-    switchPage(1 - menuPage);
     return;
   }
 
@@ -434,19 +379,6 @@ if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
           }
           freeCoverBuffer();
           coverRendered = false;
-          requestUpdate();
-        }
-      } else {
-        // Switch menu page
-        const int targetPage = (menuPage == 0) ? 1 : 0;
-        if (targetPage == 0 || getPage1ItemCount() > 0) {
-          menuPage = targetPage;
-          const auto& switchMetrics = UITheme::getInstance().getMetrics();
-          // In RoundedRaff (homeContinueReadingInMenu) there is no separate
-          // book section; the first menu slot is always Continue Reading.
-          selectorIndex = (switchMetrics.homeContinueReadingInMenu && !recentBooks.empty())
-                              ? 0
-                              : booksCount;
           requestUpdate();
         }
       }
@@ -574,25 +506,15 @@ void HomeActivity::render(RenderLock&&) {
   std::vector<const char*> menuItems;
   std::vector<UIIcon> menuIcons;
 
-  if (menuPage == 0) {
-    menuItems = { "AO3 Library", "Dashboard", tr(STR_BROWSE_FILES), tr(STR_FILE_TRANSFER), tr(STR_SETTINGS_TITLE) };
-    menuIcons = { Ao3Library, Recent, Folder, Transfer, Settings };
-    if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
-      menuItems.insert(menuItems.begin(), tr(STR_CONTINUE_READING));
-      menuIcons.insert(menuIcons.begin(), Book);
-    }
-  } else {
-    // Page 1: prepend Continue Reading first (same as page 0) so the user
-    // always sees it as the first entry regardless of which page they're on.
-    if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
-      menuItems.push_back(tr(STR_CONTINUE_READING));
-      menuIcons.push_back(Book);
-    }
-    if (hasOpdsServers) {
-      menuItems.push_back("OPDS Browser");
-      menuIcons.push_back(OpdsBrowser);
-    }
-    // future page-1 entries go here
+  menuItems = {"AO3 Library", "Dashboard", tr(STR_BROWSE_FILES), tr(STR_FILE_TRANSFER), tr(STR_SETTINGS_TITLE)};
+  menuIcons = {Ao3Library, Recent, Folder, Transfer, Settings};
+  if (hasOpdsServers) {
+    menuItems.push_back("OPDS Browser");
+    menuIcons.push_back(OpdsBrowser);
+  }
+  if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
+    menuItems.insert(menuItems.begin(), tr(STR_CONTINUE_READING));
+    menuIcons.insert(menuIcons.begin(), Book);
   }
 
   GUI.drawButtonMenu(
@@ -605,34 +527,13 @@ void HomeActivity::render(RenderLock&&) {
       [&menuItems](int index) { return std::string(menuItems[index]); },
       [&menuIcons](int index) { return menuIcons[index]; });
 
-  // Page indicator (touch builds only): filled dot = the current menu page.
-  if (mappedInput.hasTouch() && getPage1ItemCount() > 0) {
-    constexpr int kDot = 12;
-    constexpr int kGap = 16;
-    const int dotsX = (pageWidth - (2 * kDot + kGap)) / 2;
-    const int dotsY = pageHeight - metrics.buttonHintsHeight - kPageDotsFromBottom;
-    for (int i = 0; i < 2; ++i) {
-      const int x = dotsX + i * (kDot + kGap);
-      if (i == menuPage) {
-        renderer.fillRoundedRect(x, dotsY, kDot, kDot, kDot / 2, Black);
-      } else {
-        renderer.drawRoundedRect(x, dotsY, kDot, kDot, 1, kDot / 2, true);
-      }
-    }
-  }
-
-const char* backLabel = "";
+  const char* backLabel = "";
   if (selectorIndex < static_cast<int>(recentBooks.size())) {
     // Books are highlighted
     if (recentBooks[selectorIndex].pinned) {
       backLabel = tr(STR_UNPIN);
     } else if (RECENT_BOOKS.getPinnedCount() < metrics.homeRecentBooksCount) {
       backLabel = tr(STR_PIN);
-    }
-  } else {
-    // Menu entries are highlighted
-    if (getPage1ItemCount() > 0) {
-      backLabel = "Switch";
     }
   }
 

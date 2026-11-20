@@ -19,7 +19,6 @@ class HomeActivity final : public Activity {
   bool firstRenderDone = false;
   bool hasOpdsServers = false;
   bool hasAo3Library = false;
-  int menuPage = 0;
   bool coverRendered = false;      // Track if cover has been rendered once
   bool coverBufferStored = false;  // Track if cover buffer is stored
   // Home can be entered while Back is still held (e.g. leaving Settings with
@@ -72,7 +71,6 @@ class HomeActivity final : public Activity {
   void onAo3LibraryOpen();
 
   int getMenuItemCount() const;
-  int getPage1ItemCount() const;
   bool storeCoverBuffer();    // Store frame buffer for cover image
   bool restoreCoverBuffer();  // Restore frame buffer from stored cover
   void freeCoverBuffer();     // Free the stored cover buffer
