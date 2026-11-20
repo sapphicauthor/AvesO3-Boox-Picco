@@ -28,7 +28,8 @@ enum Color : uint8_t { Clear = 0x00, White = 0x01, LightGray = 0x05, DarkGray = 
 
 class GfxRenderer {
  public:
-  enum RenderMode { BW, GRAYSCALE_LSB, GRAYSCALE_MSB };
+  // GRAYSCALE_ABS_LSB/MSB draw one bit plane of an absolute 4-level gray value.
+  enum RenderMode { BW, GRAYSCALE_LSB, GRAYSCALE_MSB, GRAYSCALE_ABS_LSB, GRAYSCALE_ABS_MSB };
 
   // Logical screen orientation from the perspective of callers
   enum Orientation {
