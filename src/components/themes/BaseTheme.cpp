@@ -328,6 +328,10 @@ void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
   props.titleText.align = tokens.headerTitleAlign;
   props.subtitleText = tokens.smallText;
   props.styles = tokens.popup;
+  if (isHomeHeaderRect(renderer, rect)) {
+    // The theme paints the home background behind the header itself.
+    props.styles.normal.background = fui::Paint::none();
+  }
   props.sidePadding = tokens.headerSidePadding;
   if (batteryDetached) {
     // Battery in its own corner strip; the title owns the full width of the

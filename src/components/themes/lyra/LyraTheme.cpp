@@ -82,6 +82,11 @@ void LyraTheme::fillBatteryIcon(const GfxRenderer& renderer, Rect rect, uint16_t
   }
 }
 
+void LyraTheme::fillSelectionBackground(const GfxRenderer& renderer, const int x, const int y, const int width,
+                                        const int height) const {
+  renderer.fillRectDither(x, y, width, height, Color::LightGray);
+}
+
 void LyraTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const char* label, const char* rightLabel) const {
   const int contentWidth = std::max(0, rect.width - LyraMetrics::values.contentSidePadding * 2);
 
@@ -298,9 +303,8 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
                                Color::LightGray);
       renderer.fillRectDither(tileX, tileY + hPaddingInSelection, hPaddingInSelection,
                               LyraMetrics::values.homeCoverHeight, Color::LightGray);
-      renderer.fillRectDither(tileX + hPaddingInSelection + coverWidth, tileY + hPaddingInSelection,
-                              tileWidth - hPaddingInSelection - coverWidth, LyraMetrics::values.homeCoverHeight,
-                              Color::LightGray);
+      fillSelectionBackground(renderer, tileX + hPaddingInSelection + coverWidth, tileY + hPaddingInSelection,
+                              tileWidth - hPaddingInSelection - coverWidth, LyraMetrics::values.homeCoverHeight);
       renderer.fillRoundedRect(tileX, tileY + LyraMetrics::values.homeCoverHeight + hPaddingInSelection, tileWidth,
                                hPaddingInSelection, cornerRadius, false, false, true, true, Color::LightGray);
     }

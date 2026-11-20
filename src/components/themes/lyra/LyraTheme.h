@@ -98,6 +98,8 @@ class LyraTheme : public BaseTheme {
                            std::function<bool()> storeCoverBuffer) const override;
   void drawEmptyRecents(const GfxRenderer& renderer, const Rect rect) const;
   bool showsFileIcons() const override { return true; }
+  // Fill behind the selected home cover tile, beside the cover.
+  virtual void fillSelectionBackground(const GfxRenderer& renderer, int x, int y, int width, int height) const;
 
  private:
   mutable std::string cachedBookPath;

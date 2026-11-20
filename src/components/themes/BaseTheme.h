@@ -242,8 +242,13 @@ class BaseTheme {
   virtual int getMenuRowHeight(const GfxRenderer& renderer) const;
   virtual void drawHeader(const GfxRenderer& renderer, Rect rect, const char* title,
                           const char* subtitle = nullptr) const;
+  // True when rect is the home screen's header strip and the theme paints its
+  // own background there (so the header must not be cleared to white).
+  virtual bool isHomeHeaderRect(const GfxRenderer& renderer, Rect rect) const { return false; }
   virtual void drawSubHeader(const GfxRenderer& renderer, Rect rect, const char* label,
                              const char* rightLabel = nullptr) const;
+  // Paint the home screen background before anything else is drawn on it.
+  virtual void drawHomeBackground(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const {}
   virtual void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                                    const int selectorIndex, bool& coverRendered, bool& coverBufferStored,
                                    bool& bufferRestored, std::function<bool()> storeCoverBuffer) const;

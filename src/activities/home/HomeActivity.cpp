@@ -483,6 +483,7 @@ void HomeActivity::render(RenderLock&&) {
   const auto pageHeight = renderer.getScreenHeight();
 
   renderer.clearScreen();
+  GUI.drawHomeBackground(renderer, recentBooks);
   bool bufferRestored = coverBufferStored && restoreCoverBuffer();
 
   // Band spans topPadding..homeTopPadding: the cover tile starts at the fixed

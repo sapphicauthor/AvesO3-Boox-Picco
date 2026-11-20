@@ -979,6 +979,53 @@ void GfxRenderer::fillRectDither(const int x, const int y, const int width, cons
   }
 }
 
+void GfxRenderer::fillRectDitherBlend(const int x, const int y, const int width, const int height, const Color color,
+                                      const uint8_t percent) const {
+  if (color == Color::Clear || percent == 0 || width <= 0 || height <= 0) return;
+  if (percent >= 100 || renderMode != BW) {
+    fillRectDither(x, y, width, height, color);
+    return;
+  }
+  if (!frameBuffer) return;
+  if (fontCacheManager_ && fontCacheManager_->isScanning()) return;
+
+  const uint8_t bayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+  const uint8_t coverage = color == Color::DarkGray    ? 50
+                           : color == Color::Black     ? 100
+                           : color == Color::LightGray ? 25
+                                                       : 0;
+  const int x0 = std::max(x, 0);
+  const int y0 = std::max(y, 0);
+  const int x1 = std::min(x + width, getScreenWidth());
+  const int y1 = std::min(y + height, getScreenHeight());
+  const uint32_t weighted = static_cast<uint32_t>(coverage) * percent;
+
+  for (int py = y0; py < y1; py++) {
+    for (int px = x0; px < x1; px++) {
+      int phyX = 0;
+      int phyY = 0;
+      rotateCoordinates(orientation, px, py, &phyX, &phyY, panelWidth, panelHeight);
+      if (phyX < 0 || phyX >= panelWidth || phyY < 0 || phyY >= panelHeight) continue;
+      uint8_t* target = frameBuffer;
+      uint32_t rowY = static_cast<uint32_t>(phyY);
+      if (_stripActive) {
+        if (phyY < _stripY0 || phyY >= _stripY0 + _stripRows) continue;
+        target = _stripBuf;
+        rowY = static_cast<uint32_t>(phyY - _stripY0);
+      }
+      uint8_t& byte = target[rowY * panelWidthBytes + (phyX / 8)];
+      const uint8_t mask = 1 << (7 - (phyX % 8));
+      const int current = (byte & mask) ? 0 : 100;
+      const int16_t blended = static_cast<int16_t>(((100 - percent) * current + weighted + 50) / 100);
+      if (bayer[py & 3][px & 3] * 100 < blended * 16) {
+        byte &= ~mask;
+      } else {
+        byte |= mask;
+      }
+    }
+  }
+}
+
 template <Color C>
 void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const int height) const {
   if constexpr (C == Color::Clear) return;
