@@ -10,7 +10,6 @@
 #include <esp_heap_caps.h>
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 
 #include "RecentBooksStore.h"
@@ -23,6 +22,26 @@ constexpr size_t kMaxBackgroundFileNameLen = 256;
 
 constexpr uint8_t kBayer4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
 
+// The lightening only depends on the 2-bit level, so it is worked out at compile
+// time: the pixel loop runs for every screen pixel and float division is slow.
+// BW: a pixel is drawn when its Bayer value is below the level's threshold.
+constexpr uint8_t bwThreshold(const unsigned level) {
+  const float darkness =
+      static_cast<float>(3 - static_cast<int>(level)) / 3.0f * kBackgroundStrengthPercent / 100.0f * 16.0f;
+  uint8_t count = 0;
+  while (count < 16 && count < darkness) count++;
+  return count;
+}
+// Gray modes: the 2-bit shade the level is lightened to (rounded half up).
+constexpr uint8_t grayShade(const unsigned level) {
+  const float value = level * kBackgroundStrengthPercent / 100.0f + 1.2f;
+  int rounded = static_cast<int>(value);
+  if (value - rounded >= 0.5f) rounded++;
+  return static_cast<uint8_t>(rounded);
+}
+constexpr uint8_t kBwThreshold[4] = {bwThreshold(0), bwThreshold(1), bwThreshold(2), bwThreshold(3)};
+constexpr uint8_t kGrayShade[4] = {grayShade(0), grayShade(1), grayShade(2), grayShade(3)};
+
 }  // namespace
 
 // Draw one background pixel. level is the image's 2-bit gray (0 = black,
@@ -30,13 +49,11 @@ constexpr uint8_t kBayer4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9},
 void plotBackgroundPixel(const GfxRenderer& renderer, const int x, const int y, const unsigned level,
                          const int renderMode) {
   if (renderMode == GfxRenderer::BW) {
-    const float darkness =
-        static_cast<float>(3 - static_cast<int>(level)) / 3.0f * kBackgroundStrengthPercent / 100.0f * 16.0f;
-    if (darkness > kBayer4[y & 3][x & 3]) renderer.drawPixel(x, y, true);
+    if (kBayer4[y & 3][x & 3] < kBwThreshold[level & 3]) renderer.drawPixel(x, y, true);
     return;
   }
 
-  const auto shade = static_cast<uint8_t>(lroundf(level * kBackgroundStrengthPercent / 100.0f + 1.2f));
+  const uint8_t shade = kGrayShade[level & 3];
   bool draw = false;
   if (renderMode == GfxRenderer::GRAYSCALE_MSB) {
     draw = shade == 1 || shade == 2;
