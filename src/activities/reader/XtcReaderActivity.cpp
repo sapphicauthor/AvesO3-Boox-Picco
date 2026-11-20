@@ -144,6 +144,18 @@ void XtcReaderActivity::renderPage() {
   const uint16_t pageWidth = xtc->getPageWidth();
   const uint16_t pageHeight = xtc->getPageHeight();
   const uint8_t bitDepth = xtc->getBitDepth();
+  const int screenWidth = renderer.getScreenWidth();
+  const int screenHeight = renderer.getScreenHeight();
+
+  // A damaged XTC header can report a zero-sized page; never size a buffer or
+  // run the blit loops from it.
+  if (pageWidth == 0 || pageHeight == 0 || screenWidth <= 0 || screenHeight <= 0) {
+    LOG_ERR("XTR", "Invalid page dimensions: %ux%u on %dx%d screen", pageWidth, pageHeight, screenWidth, screenHeight);
+    renderer.clearScreen();
+    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_PAGE_LOAD_ERROR), true, EpdFontFamily::BOLD);
+    renderer.displayBuffer();
+    return;
+  }
 
   size_t pageBufferSize;
   if (bitDepth == 2) {
