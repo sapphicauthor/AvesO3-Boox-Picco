@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Bitmap.h>
+#include <BitmapHelpers.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
@@ -56,18 +57,10 @@ void plotBackgroundPixel(const GfxRenderer& renderer, const int x, const int y, 
     return;
   }
 
-  const uint8_t shade = kGrayShade[level & 3];
-  bool draw = false;
-  if (renderMode == GfxRenderer::GRAYSCALE_MSB) {
-    draw = shade == 1 || shade == 2;
-  } else if (renderMode == GfxRenderer::GRAYSCALE_LSB) {
-    draw = shade == 1;
-  } else if (renderMode == GfxRenderer::GRAYSCALE_ABS_LSB) {
-    draw = shade == 1 || shade == 3;
-  } else if (renderMode == GfxRenderer::GRAYSCALE_ABS_MSB) {
-    draw = shade == 2 || shade == 3;
-  }
-  if (draw) renderer.drawPixel(x, y, false);
+  if (renderMode != GfxRenderer::GRAYSCALE_LSB && renderMode != GfxRenderer::GRAYSCALE_MSB) return;
+  const auto pixel = grayPlanePixel(kGrayShade[level & 3], renderMode == GfxRenderer::GRAYSCALE_MSB,
+                                    renderer.grayPlanesAreAbsolute());
+  if (pixel.write) renderer.drawPixel(x, y, pixel.black);
 }
 
 namespace {
