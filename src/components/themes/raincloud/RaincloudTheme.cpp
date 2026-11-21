@@ -11,6 +11,7 @@
 #include <esp_heap_caps.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 
 #include "CrossPointSettings.h"
@@ -304,6 +305,87 @@ constexpr int OUTLINE_PX = 3;
 // same for every orientation. Bit-parallel: the outline grows 8 pixels per byte
 // operation and the open space is flooded run by run with alternating sweeps.
 // scratch must hold 3 * widthBytes * height bytes.
+// Gives the text inside a gray selection box the home outline. The box's gray
+// is an ordered dither whose dots never touch, while text strokes do: a black
+// pixel with a black 8-neighbour is text, and every lone dot within the outline
+// shape (3 px, corners cut, as composeOutlinedBackground) of text turns white.
+// The box (x1, y1 exclusive) is in panel pixels; ink is a scratch plane of the
+// framebuffer's size.
+void outlineSelectionText(uint8_t* fb, uint8_t* ink, const int widthBytes, const int x0, const int y0, const int x1,
+                          const int y1) {
+  constexpr int OUTLINE_PX = 3;
+  // Only pixels inside the box count: the gray around it may use another pattern.
+  auto black = [&](const int x, const int y) {
+    return x >= x0 && y >= y0 && x < x1 && y < y1 && !(fb[y * widthBytes + x / 8] & (0x80 >> (x & 7)));
+  };
+  auto isInk = [&](const int x, const int y) { return ink[y * widthBytes + x / 8] & (0x80 >> (x & 7)); };
+  for (int y = y0; y < y1; y++) {
+    for (int x = x0; x < x1; x++) {
+      const uint8_t bit = 0x80 >> (x & 7);
+      uint8_t& cell = ink[y * widthBytes + x / 8];
+      cell &= static_cast<uint8_t>(~bit);
+      if (!black(x, y)) continue;
+      for (int dy = -1; dy <= 1 && !(cell & bit); dy++)
+        for (int dx = -1; dx <= 1; dx++)
+          if ((dx || dy) && black(x + dx, y + dy)) {
+            cell |= bit;
+            break;
+          }
+    }
+  }
+  for (int y = y0; y < y1; y++) {
+    for (int x = x0; x < x1; x++) {
+      if (!black(x, y) || isInk(x, y)) continue;
+      bool nearText = false;
+      for (int dy = -OUTLINE_PX; dy <= OUTLINE_PX && !nearText; dy++) {
+        const int ny = y + dy;
+        if (ny < y0 || ny >= y1) continue;
+        for (int dx = -OUTLINE_PX; dx <= OUTLINE_PX; dx++) {
+          const int nx = x + dx;
+          if (nx < x0 || nx >= x1 || (std::abs(dx) == OUTLINE_PX && std::abs(dy) == OUTLINE_PX)) continue;
+          if (isInk(nx, ny)) {
+            nearText = true;
+            break;
+          }
+        }
+      }
+      if (nearText) fb[y * widthBytes + x / 8] |= static_cast<uint8_t>(0x80 >> (x & 7));
+    }
+  }
+}
+
+// A logical rectangle in panel pixels (x1, y1 exclusive), clamped to the panel.
+void toPanelRect(const GfxRenderer::Orientation orientation, const Rect& r, const int width, const int height, int& x0,
+                 int& y0, int& x1, int& y1) {
+  auto map = [&](const int lx, const int ly, int& px, int& py) {
+    switch (orientation) {
+      case GfxRenderer::Portrait:
+        px = ly;
+        py = height - 1 - lx;
+        break;
+      case GfxRenderer::LandscapeClockwise:
+        px = width - 1 - lx;
+        py = height - 1 - ly;
+        break;
+      case GfxRenderer::PortraitInverted:
+        px = width - 1 - ly;
+        py = lx;
+        break;
+      default:
+        px = lx;
+        py = ly;
+        break;
+    }
+  };
+  int ax, ay, bx, by;
+  map(r.x, r.y, ax, ay);
+  map(r.x + r.width - 1, r.y + r.height - 1, bx, by);
+  x0 = std::max(0, std::min(ax, bx));
+  y0 = std::max(0, std::min(ay, by));
+  x1 = std::min(width, std::max(ax, bx) + 1);
+  y1 = std::min(height, std::max(ay, by) + 1);
+}
+
 void composeOutlinedBackground(uint8_t* fb, const uint8_t* background, uint8_t* scratch, const int width,
                                const int height) {
   const int wb = width / 8;
@@ -363,6 +445,13 @@ bool RaincloudTheme::isHomeHeaderRect(const GfxRenderer& renderer, Rect rect) co
 
 void RaincloudTheme::fillSelectionBackground(const GfxRenderer& renderer, int x, int y, int width, int height) const {
   renderer.fillRectDitherBlend(x, y, width, height, Color::LightGray, 50);
+  addSelectionTextRect(Rect{x, y, width, height});
+}
+
+void RaincloudTheme::addSelectionTextRect(const Rect rect) const {
+  if (outlinePending && selectionTextRectCount < MAX_SELECTION_TEXT_RECTS && rect.width > 0 && rect.height > 0) {
+    selectionTextRects[selectionTextRectCount++] = rect;
+  }
 }
 
 void RaincloudTheme::pickIndexedBackground(std::string& selectedPath) const {
@@ -389,6 +478,7 @@ void RaincloudTheme::pickIndexedBackground(std::string& selectedPath) const {
 
 void RaincloudTheme::drawHomeBackground(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const {
   outlinePending = false;
+  selectionTextRectCount = 0;
   drawBackgroundLayer(renderer, recentBooks);
 
   uint8_t* fb = renderer.getFrameBuffer();
@@ -411,6 +501,14 @@ void RaincloudTheme::finishHomeScreen(GfxRenderer& renderer) const {
   const int widthBytes = renderer.getDisplayWidthBytes();
   const size_t fbSize = renderer.getBufferSize();
   if (!fb || widthBytes <= 0 || fbSize > outlineBackgroundSize || fbSize * 3 > outlineMaskSize) return;
+  const int panelWidth = widthBytes * 8;
+  const int panelHeight = static_cast<int>(fbSize / widthBytes);
+  for (int i = 0; i < selectionTextRectCount; i++) {
+    int x0, y0, x1, y1;
+    toPanelRect(renderer.getOrientation(), selectionTextRects[i], panelWidth, panelHeight, x0, y0, x1, y1);
+    if (x0 < x1 && y0 < y1) outlineSelectionText(fb, outlineMask.get(), widthBytes, x0, y0, x1, y1);
+  }
+  selectionTextRectCount = 0;
   composeOutlinedBackground(fb, outlineBackground.get(), outlineMask.get(), widthBytes * 8,
                             static_cast<int>(fbSize / widthBytes));
   frameComposed = true;

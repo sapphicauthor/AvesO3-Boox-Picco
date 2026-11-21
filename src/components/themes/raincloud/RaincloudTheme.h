@@ -21,6 +21,11 @@ class RaincloudTheme : public LyraTheme {
   void homeFrameShown(const GfxRenderer& renderer) const override;
   void fillSelectionBackground(const GfxRenderer& renderer, int x, int y, int width, int height) const override;
 
+ protected:
+  // Marks a gray selection box whose text gets the home outline: within it,
+  // finishHomeScreen clears the gray dots around the text. Home screen only.
+  void addSelectionTextRect(Rect rect) const;
+
  private:
   struct PsramFree {
     void operator()(uint8_t* ptr) const;
@@ -60,6 +65,9 @@ class RaincloudTheme : public LyraTheme {
   mutable size_t outlineBackgroundSize = 0;
   mutable size_t outlineMaskSize = 0;
   mutable bool outlinePending = false;
+  static constexpr int MAX_SELECTION_TEXT_RECTS = 2;
+  mutable Rect selectionTextRects[MAX_SELECTION_TEXT_RECTS];
+  mutable int selectionTextRectCount = 0;
   // The last composed home frame sent to the panel (PSRAM), and the renderer's
   // panel update count right after it; another screen's refresh moves the count.
   mutable std::unique_ptr<uint8_t[], PsramFree> shownFrame;
