@@ -4,9 +4,11 @@ Changes on this branch (`picco-recovery`) on top of [AvesO3](https://github.com/
 1.6.0, for the Boox Picco (see `docs/picco.md`). Entries are grouped the way they would be offered
 as pull requests; documentation commits like this file are not part of them.
 
-## Unreleased (2026-11-20)
+## Unreleased (2026-11-21)
 
-Not yet tested on the device. Everything below builds.
+Everything below builds. Tested on the device on 2026-11-21: frontlight and slide switch, the
+Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device test is listed in
+`docs/picco-roadmap.md`.
 
 ### Picco support
 - Build environment `[env:picco]`, `partitions_picco.csv` (keeps Boox's `safeboot` recovery
@@ -80,6 +82,12 @@ Not yet tested on the device. Everything below builds.
   (ea85f4d7)
 - Full-tone images in the EPUB reader on the Picco, CrossPoint 6e7caa22. (ac4024cc)
 - The custom 4-level render modes (54fd01fa) were replaced by CrossPoint's version above.
+
+### Other fixes from CrossPoint
+- Time a screen spends blocked (a long download or index build) no longer counts toward auto-sleep,
+  CrossPoint 209cb53. (ef1b5819)
+- The web rename dialog selects only the name, so the extension is kept, CrossPoint bb7b653.
+  (ae8eb124)
 
 ### Text
 - Picco UI wording (sentence-style strings). (740acb20)
