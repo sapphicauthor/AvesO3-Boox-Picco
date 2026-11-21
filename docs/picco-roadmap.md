@@ -15,7 +15,8 @@ is done.
    gray needs a full refresh on every change, so it is back to full-strength Bayer dithering
    (owner's choice, 2026-11-21). Leaving USB Drive mode without unplugging was dropped.
 3. **Device test (first round done 2026-11-21; fixed since: frontlight and control center, books
-   failing to index)**, only when the owner says so: Raincloud background and outline, Flip Picco and
+   failing to index; Raincloud background, outline and refreshes passed 2026-11-21)**, only when the
+   owner says so: Flip Picco and
    its full refresh, the PIN screen ignoring gestures, each Slide Switch mode, gray images and
    sleep images, AO3 folder indexing (the Failed Books page and the failure log).
 
