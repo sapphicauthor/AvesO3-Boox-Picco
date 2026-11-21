@@ -60,8 +60,8 @@ Not yet tested on the device. Everything below builds.
 ### Reading
 - XTC: pages with zero dimensions are rejected. (da49384b)
 - XTC: pages are fitted to the screen. (d5c8c8e3)
-- EPUB: damaged cache files are detected and rebuilt instead of crashing; the AO3 indexer skips
-  books with an invalid cache. (142b02e9)
+- EPUB: damaged cache files are detected and rebuilt instead of crashing, by the AO3 indexer too.
+  (142b02e9, 7393b1a9)
 - EPUB: building a book's spine/TOC cache stops cleanly when memory runs low instead of aborting
   (the crash in the device's core dump, during AO3 indexing). (d88550a2)
 - AO3 folder indexing logs every book it could not index, with the reason, to
