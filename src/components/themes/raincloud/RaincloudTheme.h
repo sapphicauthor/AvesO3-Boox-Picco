@@ -31,7 +31,7 @@ class RaincloudTheme : public LyraTheme {
   mutable std::string backgroundThumbPath;
   mutable std::string randomBackgroundPath;
   mutable bool randomBackgroundPicked = false;
-  // 2 bits per screen pixel (background level 0..3).
+  // The drawn background, 1 bit per screen pixel (1 = black).
   mutable std::unique_ptr<uint8_t[], PsramFree> backgroundCache;
   mutable size_t backgroundCacheCapacity = 0;
   mutable std::string cachedPath;
