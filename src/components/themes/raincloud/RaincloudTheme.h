@@ -19,6 +19,8 @@ class RaincloudTheme : public LyraTheme {
   void finishHomeScreen(GfxRenderer& renderer) const override;
   bool homeGrayPassReady() const override { return grayPassReady; }
   void displayHomeGrayPass(GfxRenderer& renderer) const override;
+  bool homeFrameUnchanged() const override { return frameUnchanged; }
+  void homeFrameShown(const GfxRenderer& renderer) const override;
   void fillSelectionBackground(const GfxRenderer& renderer, int x, int y, int width, int height) const override;
 
  private:
@@ -66,6 +68,14 @@ class RaincloudTheme : public LyraTheme {
   // Set by finishHomeScreen when the frame's picture can take the gray pass;
   // outlineBackground then holds that BW frame and outlineMask its open space.
   mutable bool grayPassReady = false;
+  // The last composed home frame sent to the panel (PSRAM), and the renderer's
+  // panel update count right after it; another screen's refresh moves the count.
+  mutable std::unique_ptr<uint8_t[], PsramFree> shownFrame;
+  mutable size_t shownFrameSize = 0;
+  mutable uint32_t shownPanelUpdates = 0;
+  mutable bool shownValid = false;
+  mutable bool frameComposed = false;   // this render's frame went through the compositor
+  mutable bool frameUnchanged = false;  // ... and matches shownFrame on the panel
 
   void pickIndexedBackground(std::string& selectedPath) const;
   void drawBackgroundLayer(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const;

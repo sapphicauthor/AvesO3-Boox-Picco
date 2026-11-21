@@ -44,6 +44,7 @@ class GfxRenderer {
   HalDisplay& display;
   RenderMode renderMode;
   mutable bool absoluteGrayPlanes = false;
+  mutable uint32_t panelUpdates = 0;  // counts every frame sent to the panel
   Orientation orientation;
   bool fadingFix;
   uint8_t* frameBuffer = nullptr;
@@ -344,6 +345,9 @@ class GfxRenderer {
   void displayGrayBuffer() const;
   // Active input encoding, used when drawing monochrome overlays into planes.
   bool grayPlanesAreAbsolute() const { return absoluteGrayPlanes; }
+  // Goes up with every frame sent to the panel, so a caller can tell whether
+  // the panel still shows the frame it sent last.
+  uint32_t panelUpdateCount() const { return panelUpdates; }
 
   // Tiled grayscale (X4): stream one band of a plane straight to controller RAM
   // from `scratch` (panelWidthBytes * numRows, physical rows [yStart, yStart+

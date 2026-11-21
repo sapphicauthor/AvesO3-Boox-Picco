@@ -154,6 +154,7 @@ void HomeActivity::onEnter() {
   recentsLoaded = false;
   recentsLoading = false;
   firstRenderDone = false;
+  grayPassShown = false;
   coverRendered = false;
   coverBufferStored = false;
   const auto& metrics = UITheme::getInstance().getMetrics();
@@ -554,15 +555,22 @@ void HomeActivity::render(RenderLock&&) {
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   GUI.finishHomeScreen(renderer);
-  const bool grayPass = grayPassRequested && firstRenderDone && GUI.homeGrayPassReady();
+  // Gray needs a full refresh to leave again, so it is shown once per visit:
+  // after it, moving the selection costs one full refresh, then stays B/W.
+  const bool grayPass = grayPassRequested && firstRenderDone && !grayPassShown && GUI.homeGrayPassReady();
   grayPassRequested = false;
   if (grayPass) {
     GUI.displayHomeGrayPass(renderer);
+    GUI.homeFrameShown(renderer);
     grayPassDueAt = 0;
+    grayPassShown = true;
+  } else if (GUI.homeFrameUnchanged()) {
+    // Nothing changed on screen: no refresh, and a pending gray pass keeps its time.
   } else {
     renderer.displayBuffer(cleanInitialRefresh && !firstRenderDone ? HalDisplay::HALF_REFRESH
                                                                    : HalDisplay::FAST_REFRESH);
-    grayPassDueAt = GUI.homeGrayPassReady() ? millis() + HOME_GRAY_PASS_DELAY_MS : 0;
+    GUI.homeFrameShown(renderer);
+    grayPassDueAt = !grayPassShown && GUI.homeGrayPassReady() ? millis() + HOME_GRAY_PASS_DELAY_MS : 0;
   }
 
   if (!firstRenderDone) {

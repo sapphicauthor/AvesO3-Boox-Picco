@@ -397,6 +397,8 @@ void RaincloudTheme::drawHomeBackground(GfxRenderer& renderer, const std::vector
 
 void RaincloudTheme::finishHomeScreen(GfxRenderer& renderer) const {
   grayPassReady = false;
+  frameComposed = false;
+  frameUnchanged = false;
   if (!outlinePending) return;
   outlinePending = false;
   uint8_t* fb = renderer.getFrameBuffer();
@@ -405,6 +407,9 @@ void RaincloudTheme::finishHomeScreen(GfxRenderer& renderer) const {
   if (!fb || widthBytes <= 0 || fbSize > outlineBackgroundSize || fbSize * 3 > outlineMaskSize) return;
   composeOutlinedBackground(fb, outlineBackground.get(), outlineMask.get(), widthBytes * 8,
                             static_cast<int>(fbSize / widthBytes));
+  frameComposed = true;
+  frameUnchanged = shownValid && shownFrameSize >= fbSize && renderer.panelUpdateCount() == shownPanelUpdates &&
+                   memcmp(fb, shownFrame.get(), fbSize) == 0;
 
   // Gray pass, as on the sleep screen: only with no cover filter, for a picture
   // with gray levels, on a panel with full gray planes.
@@ -415,6 +420,15 @@ void RaincloudTheme::finishHomeScreen(GfxRenderer& renderer) const {
                   SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER &&
                   renderer.grayscaleCapabilities(mode).supported();
   if (grayPassReady) memcpy(outlineBackground.get(), fb, fbSize);  // keep the BW frame for the gray pass
+}
+
+void RaincloudTheme::homeFrameShown(const GfxRenderer& renderer) const {
+  const uint8_t* fb = renderer.getFrameBuffer();
+  const size_t fbSize = renderer.getBufferSize();
+  shownValid = frameComposed && fb && fbSize > 0 && reservePsram(shownFrame, shownFrameSize, fbSize);
+  if (!shownValid) return;
+  memcpy(shownFrame.get(), fb, fbSize);
+  shownPanelUpdates = renderer.panelUpdateCount();
 }
 
 void RaincloudTheme::displayHomeGrayPass(GfxRenderer& renderer) const {

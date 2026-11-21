@@ -255,6 +255,11 @@ class BaseTheme {
   // been idle; replaces that frame's displayBuffer().
   virtual bool homeGrayPassReady() const { return false; }
   virtual void displayHomeGrayPass(GfxRenderer& renderer) const {}
+  // True when the finished home frame is the one the panel already shows, so
+  // the home screen can skip the refresh. homeFrameShown() records each frame
+  // the home screen sent to the panel.
+  virtual bool homeFrameUnchanged() const { return false; }
+  virtual void homeFrameShown(const GfxRenderer& renderer) const {}
   virtual void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                                    const int selectorIndex, bool& coverRendered, bool& coverBufferStored,
                                    bool& bufferRestored, std::function<bool()> storeCoverBuffer) const;

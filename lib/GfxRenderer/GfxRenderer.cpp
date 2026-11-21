@@ -1733,11 +1733,13 @@ void GfxRenderer::displayBuffer(HalDisplay::RefreshMode refreshMode) const {
   auto elapsed = millis() - start_ms;
   LOG_DBG("GFX", "Time = %lu ms from clearScreen to displayBuffer", elapsed);
   refreshMode = applyPromotedRefresh(refreshMode);
+  panelUpdates++;
   display.displayBuffer(refreshMode, fadingFix);
 }
 
 void GfxRenderer::displayBufferAsync(HalDisplay::RefreshMode refreshMode) const {
   refreshMode = applyPromotedRefresh(refreshMode);
+  panelUpdates++;
   // The async path has no turn-off-screen hook, which the sunlight fading fix
   // relies on; keep those users on the blocking path.
   if (fadingFix) {
@@ -2260,17 +2262,22 @@ size_t GfxRenderer::getBufferSize() const { return frameBufferSize; }
 
 void GfxRenderer::displayGrayscaleBase(HalDisplay::RefreshMode fallback) const {
   absoluteGrayPlanes = false;
+  panelUpdates++;
   display.displayGrayscaleBase(fallback, fadingFix);
 }
 
 bool GfxRenderer::displayGrayscaleBase(HalDisplay::GrayscaleMode mode, HalDisplay::RefreshMode fallback) const {
   absoluteGrayPlanes = false;
+  panelUpdates++;
   if (!display.displayGrayscaleBase(mode, fallback, fadingFix)) return false;
   absoluteGrayPlanes = mode != HalDisplay::GrayscaleMode::Overlay;
   return true;
 }
 
-void GfxRenderer::preconditionGrayscale() const { display.preconditionGrayscale(); }
+void GfxRenderer::preconditionGrayscale() const {
+  panelUpdates++;
+  display.preconditionGrayscale();
+}
 
 void GfxRenderer::preconditionGrayscale(int x, int y, int w, int h) const {
   if (w <= 0 || h <= 0) return;
@@ -2286,6 +2293,7 @@ void GfxRenderer::preconditionGrayscale(int x, int y, int w, int h) const {
   if (x1 >= panelWidth) x1 = panelWidth - 1;
   if (y1 >= panelHeight) y1 = panelHeight - 1;
   if (x1 < x0 || y1 < y0) return;
+  panelUpdates++;
   display.preconditionGrayscale(static_cast<uint16_t>(x0), static_cast<uint16_t>(y0),
                                 static_cast<uint16_t>(x1 - x0 + 1), static_cast<uint16_t>(y1 - y0 + 1));
 }
@@ -2295,12 +2303,14 @@ void GfxRenderer::copyGrayscaleLsbBuffers() const { display.copyGrayscaleLsbBuff
 void GfxRenderer::copyGrayscaleMsbBuffers() const { display.copyGrayscaleMsbBuffers(frameBuffer); }
 
 void GfxRenderer::displayGrayBuffer() const {
+  panelUpdates++;
   display.displayGrayBuffer(fadingFix);
   absoluteGrayPlanes = false;
 }
 
 void GfxRenderer::setRenderMode(RenderMode mode) {
   if (mode == BW && absoluteGrayPlanes) {
+    panelUpdates++;
     display.cleanupGrayscaleBuffers(nullptr);  // cancel an unfinished absolute pass
     absoluteGrayPlanes = false;
   }
@@ -2389,6 +2399,7 @@ void GfxRenderer::restoreBwBuffer(const bool resyncPanelBaseline) {
   }
 
   if (resyncPanelBaseline) {
+    panelUpdates++;
     display.cleanupGrayscaleBuffers(frameBuffer);
   }
 
@@ -2402,6 +2413,7 @@ void GfxRenderer::restoreBwBuffer(const bool resyncPanelBaseline) {
  */
 void GfxRenderer::cleanupGrayscaleWithFrameBuffer() const {
   if (frameBuffer) {
+    panelUpdates++;
     display.cleanupGrayscaleBuffers(frameBuffer);
   }
 }
