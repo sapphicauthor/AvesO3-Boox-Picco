@@ -155,7 +155,9 @@ void HomeActivity::onEnter() {
   const auto& metrics = UITheme::getInstance().getMetrics();
   loadRecentBooks(metrics.homeRecentBooksCount);
   continueReadingProgress = -1;
-  if (!recentBooks.empty() && SETTINGS.uiTheme == CrossPointSettings::LYRA) {
+  if (!recentBooks.empty() &&
+      (SETTINGS.uiTheme == CrossPointSettings::LYRA || SETTINGS.uiTheme == CrossPointSettings::RAINCLOUD ||
+       SETTINGS.uiTheme == CrossPointSettings::RAINCLOUD_EXTENDED)) {
     continueReadingProgress = loadBookProgress(recentBooks.front().path);
   }
 

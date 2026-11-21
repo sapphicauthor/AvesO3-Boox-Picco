@@ -436,9 +436,10 @@ void composeOutlinedBackground(uint8_t* fb, const uint8_t* background, uint8_t* 
 
 void RaincloudTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                                          const int selectorIndex, bool& coverRendered, bool& coverBufferStored,
-                                         bool& bufferRestored, std::function<bool()> storeCoverBuffer, int) const {
+                                         bool& bufferRestored, std::function<bool()> storeCoverBuffer,
+                                         const int progress) const {
   LyraTheme::drawRecentBookCover(renderer, rect, recentBooks, selectorIndex, coverRendered, coverBufferStored,
-                                 bufferRestored, std::move(storeCoverBuffer), /*progress=*/-1);
+                                 bufferRestored, std::move(storeCoverBuffer), progress);
 }
 
 void RaincloudTheme::PsramFree::operator()(uint8_t* ptr) const {
