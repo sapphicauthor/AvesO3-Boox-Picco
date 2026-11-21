@@ -69,7 +69,8 @@ Not yet tested on the device. Everything below builds.
   step that failed (zip, book cache, contents list, memory, SD card, AO3 details). (3a980914,
   1b3e6915, 6cfdab67)
 - AO3 folder indexing skips hidden files, such as the "._" companions macOS writes next to every
-  file it copies, which it used to count and fail as books. (e050d858)
+  file it copies, which it used to count and fail as books (e050d858), and the `/read` archive,
+  whose books it used to find again on every run (be691764).
 - EPUBs whose zip end record is more than 1 KB from the end (a long comment or trailing bytes)
   open now; the search covers the 64 KB the zip format allows. (a6b73dbb)
 
