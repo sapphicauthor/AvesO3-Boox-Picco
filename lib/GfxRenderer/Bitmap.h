@@ -70,6 +70,9 @@ class Bitmap {
   ~Bitmap();
   BmpReaderError parseHeaders();
   BmpReaderError readNextRow(uint8_t* data, uint8_t* rowBuffer) const;
+  // Reads the next row as one 8-bit luminance byte per pixel (0 = black), with
+  // no quantization, for callers that scale and dither themselves.
+  BmpReaderError readNextRowLuminance(uint8_t* lum, uint8_t* rowBuffer) const;
   BmpReaderError rewindToData() const;
   int getWidth() const { return width; }
   int getHeight() const { return height; }
