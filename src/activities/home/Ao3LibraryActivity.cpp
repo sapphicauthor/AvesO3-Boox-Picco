@@ -11,10 +11,12 @@
 #include <cstring>
 #include <algorithm>
 #include <new>
+#include <cstdlib>
 #include <ArduinoJson.h>
 #include "BookActionActivity.h"
 #include "Ao3IndexActivity.h"
 #include "Ao3LibrarySettingsActivity.h"
+#include "activities/util/KeyboardEntryActivity.h"
 #include "../../fontIds.h"
 #include "../../MappedInputManager.h"
 #include "../../components/UITheme.h"
@@ -31,10 +33,101 @@ namespace {
 // button-hint bar (touch builds report buttonHintsHeight == 0).
 constexpr int kBottomArrowRaise = 28;
 
-// Baseline the bottom arrow is positioned from: the hint-bar top when a bar
-// exists, otherwise raised so the arrow stays on screen.
+enum FilterRow : int {
+  FR_CLEAR_ALL = 0,
+  FR_FANDOM = 1,
+  FR_CLEAR_FANDOM = 2,
+  FR_REL = 3,
+  FR_CLEAR_REL = 4,
+  FR_TITLE = 5,
+  FR_CLEAR_TITLE = 6,
+  FR_AUTHOR = 7,
+  FR_CLEAR_AUTHOR = 8,
+  FR_STATUS = 9,
+  FR_CLEAR_STATUS = 10,
+  FR_TEXT = 11,
+  FR_CLEAR_TEXT = 12,
+  FR_SORT = 13,
+  FR_ORDER = 14,
+  FR_APPLY = 15,
+  FR_COUNT = 16
+};
+
+constexpr int kStatusRows = 10;
+
 inline int bottomArrowBaseY(const int screenHeight, const int hintsHeight) {
   return screenHeight - hintsHeight - (hintsHeight > 0 ? 0 : kBottomArrowRaise);
+}
+
+int letterRowCount(int row) {
+  static const int lens[] = {10, 10, 9, 8};
+  return (row >= 0 && row < 4) ? lens[row] : 0;
+}
+
+char letterAt(int row, int col) {
+  static const char* rows[] = {"1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM&"};
+  if (row < 0 || row > 3 || col < 0 || col >= letterRowCount(row)) return 0;
+  return rows[row][col];
+}
+
+struct KeyBox {
+  int x, y, w, h;
+  char ch;
+  bool clear;
+  bool apply;
+};
+
+int layoutLetterKeys(int screenW, int originY, KeyBox* out, int cap) {
+  int keyW = (screenW - 32 - 6 * 9) / 10;
+  if (keyW > 52) keyW = 52;
+  if (keyW < 28) keyW = 28;
+  const int keyH = keyW > 40 ? 40 : 32;
+  const int gap = 6;
+  int n = 0;
+  for (int row = 0; row < 4; row++) {
+    const int cols = letterRowCount(row);
+    const int total = cols * keyW + (cols - 1) * gap;
+    int x = (screenW - total) / 2;
+    const int y = originY + row * (keyH + gap);
+    for (int col = 0; col < cols && n < cap; col++) {
+      out[n++] = KeyBox{x, y, keyW, keyH, letterAt(row, col), false, false};
+      x += keyW + gap;
+    }
+  }
+  const int btnW = keyW * 3;
+  const int btnY = originY + 4 * (keyH + gap) + 8;
+  const int pair = btnW * 2 + gap * 2;
+  const int bx = (screenW - pair) / 2;
+  if (n < cap) out[n++] = KeyBox{bx, btnY, btnW, keyH, 0, true, false};
+  if (n < cap) out[n++] = KeyBox{bx + btnW + gap * 2, btnY, btnW, keyH, 0, false, true};
+  return n;
+}
+
+// fillRect's last argument is a bool: true draws black, false draws white.
+// Passing the Color enum White is nonzero, so it painted the sheet black.
+void strokeBox(GfxRenderer& renderer, int x, int y, int w, int h) {
+  renderer.fillRect(x, y, w, 1, true);
+  renderer.fillRect(x, y + h - 1, w, 1, true);
+  renderer.fillRect(x, y, 1, h, true);
+  renderer.fillRect(x + w - 1, y, 1, h, true);
+}
+
+void drawTickBox(GfxRenderer& renderer, int x, int y, bool on) {
+  strokeBox(renderer, x, y, 16, 16);
+  if (on) renderer.fillRect(x + 3, y + 3, 10, 10, true);
+}
+
+void drawLabelInBox(GfxRenderer& renderer, int x, int y, int w, int h, const char* text, int font, bool black) {
+  const auto style = EpdFontFamily::BOLD;
+  const int tw = renderer.getTextWidth(font, text, style);
+  const int th = renderer.getLineHeight(font);
+  const int tx = x + (w - tw) / 2;
+  const int ty = y + (h - th) / 2;
+  renderer.drawText(font, tx, ty, text, black, style);
+}
+
+void highlightRow(GfxRenderer& renderer, int x, int y, int w, int h) {
+  renderer.fillRoundedRect(x, y, w, h, 4, true, true, true, true, LightGray);
 }
 }  // namespace
 // ---------------------------------------------------------------------------
@@ -182,6 +275,7 @@ void Ao3LibraryActivity::loadPageCache(int page) {
     new (&pageCache[i]) Ao3LibraryMetadata();
     pageCacheStatus[i] = BookStatus::START;
     pageCacheMarkedPosition[i] = -1;
+    pageCachePlanned[i] = 0;
   }
 
   for (int i = startIdx; i < endIdx; i++) {
@@ -191,6 +285,8 @@ void Ao3LibraryActivity::loadPageCache(int page) {
     HalFile f;
     if (Storage.openFileForRead("AO3L", infoPath, f)) {
       f.read((uint8_t*)&pageCache[slot], sizeof(Ao3LibraryMetadata));
+      uint16_t planned = 0;
+      if (f.read((uint8_t*)&planned, sizeof(planned)) == sizeof(planned)) pageCachePlanned[slot] = planned;
       f.close();
     }
     pageCacheStatus[slot] = getBookStatus(viewEntries[i].cacheHash);
@@ -282,6 +378,7 @@ void Ao3LibraryActivity::loop() {
         screenState = ScreenState::FILTER_PANEL;
         pendingState = activeState;
         overlayRowIndex = 0;
+        overlayScroll_ = 0;
         requestUpdate(true);
         return;
       }
@@ -320,6 +417,7 @@ void Ao3LibraryActivity::loop() {
         screenState = ScreenState::FILTER_PANEL;
         pendingState = activeState;
         overlayRowIndex = 0;
+        overlayScroll_ = 0;
         requestUpdate(true);
         return;
       }
@@ -480,8 +578,26 @@ void Ao3LibraryActivity::loop() {
               } else if (actionRes->indexingCompleted) {
                 rebuildViewEntries();
               } else {
-                // status change or mark for later — reload page cache
-               loadPageCache(cachedPage);
+                loadPageCache(cachedPage);
+                auto it = std::find_if(viewEntries.begin(), viewEntries.end(),
+                                       [hash](const ViewEntry& v) { return v.cacheHash == hash; });
+                if (it != viewEntries.end()) {
+                  uint8_t bits = static_cast<uint8_t>(it->filterBits & ~(kFilterStatusMask | kFilterFavourite));
+                  bits = static_cast<uint8_t>(bits | (static_cast<uint8_t>(actionRes->newStatus) & kFilterStatusMask));
+                  const int flags = Ao3Librarian::getRecordFlags(epubPath);
+                  if (flags >= 0) {
+                    if (flags & kIndexFavourite) bits = static_cast<uint8_t>(bits | kFilterFavourite);
+                    if (flags & kIndexMetaCompleted) bits = static_cast<uint8_t>(bits | kFilterMetaCompleted);
+                    else bits = static_cast<uint8_t>(bits & ~kFilterMetaCompleted);
+                  }
+                  it->filterBits = bits;
+                  if (!passesFilter(*it, computeFilterHashes(activeState))) {
+                    viewEntries.erase(it);
+                    if (!viewEntries.empty() && selectorIndex >= viewEntries.size())
+                      selectorIndex = viewEntries.size() - 1;
+                    cachedPage = -1;
+                  }
+                }
              }
               requestUpdate(true);
             }
@@ -512,33 +628,22 @@ void Ao3LibraryActivity::loop() {
     if (mappedInput.wasReleased(MappedInputManager::Button::Down) ||
         mappedInput.wasReleased(MappedInputManager::Button::Right)) {
       if (mappedInput.getHeldTime() >= 500) {
-        // Skip to confirm
-        overlayRowIndex = 4;
+        overlayRowIndex = FR_APPLY;
       } else {
-        // Move Next Row (Wrapping around total of 5 rows: 0 to 4)
-        overlayRowIndex = (overlayRowIndex + 1) % 5;
-
-        // If Relationship row is disabled, skip it moving downwards
-        if (overlayRowIndex == 1 && pendingState.fandom[0] == '\0') {
-          overlayRowIndex = 2;
-        }
+        overlayRowIndex = (overlayRowIndex + 1) % FR_COUNT;
+        if (overlayRowIndex == FR_REL && pendingState.fandom[0] == '\0') overlayRowIndex = FR_CLEAR_REL;
       }
       requestUpdate(true);
       return;
     }
 
-if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
+    if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
         mappedInput.wasReleased(MappedInputManager::Button::Left)) {
       if (mappedInput.getHeldTime() >= 500) {
-        overlayRowIndex = 4;
+        overlayRowIndex = FR_APPLY;
       } else {
-        // Move Prev Row (Wrapping around backward: 0 becomes 4)
-        overlayRowIndex = (overlayRowIndex + 5 - 1) % 5;
-
-        // If Relationship row is disabled, skip it moving upwards
-        if (overlayRowIndex == 1 && pendingState.fandom[0] == '\0') {
-          overlayRowIndex = 0;
-        }
+        overlayRowIndex = (overlayRowIndex + FR_COUNT - 1) % FR_COUNT;
+        if (overlayRowIndex == FR_REL && pendingState.fandom[0] == '\0') overlayRowIndex = FR_CLEAR_FANDOM;
       }
       requestUpdate(true);
       return;
@@ -546,38 +651,31 @@ if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
 
     bool executeFilterAction = mappedInput.wasReleased(MappedInputManager::Button::Confirm);
     int tx = 0, ty = 0;
-    
+
     if (mappedInput.wasScreenTapped(tx, ty)) {
-      // Tap outside (above or below the 320px tall panel starting at Y=48): close panel
-      if (ty < 48 || ty > 368) {
+      if (ty < overlayTop_ || ty >= overlayBottom_) {
         screenState = ScreenState::LIBRARY;
         requestUpdate(true);
         return;
-      } else {
-        // Map tap Y-coordinates to the 5 rows based on renderFilterOverlay() geometry
-        if (ty >= 95 && ty < 145) {
-          overlayRowIndex = 0;
-          executeFilterAction = true;
-        } else if (ty >= 145 && ty < 195) {
-          overlayRowIndex = 1;
-          executeFilterAction = true; // The execution block safely ignores this if disabled
-        } else if (ty >= 195 && ty < 240) {
-          overlayRowIndex = 2;
-          executeFilterAction = true;
-        } else if (ty >= 240 && ty < 285) {
-          overlayRowIndex = 3;
-          executeFilterAction = true;
-        } else if (ty >= 285 && ty <= 350) {
-          overlayRowIndex = 4;
-          // Force a synchronous render pass so the user sees the button invert
-          render(RenderLock(*this));
-          executeFilterAction = true;
+      }
+      const int rowHit = [&]() {
+        layoutFilterRows();
+        for (int i = 0; i < FR_COUNT; i++) {
+          if (ty >= filterRowY_[i] && ty < filterRowY_[i] + filterRowH_[i]) return i;
         }
+        return -1;
+      }();
+      if (rowHit >= 0) {
+        overlayRowIndex = rowHit;
+        if (rowHit == FR_APPLY) render(RenderLock(*this));
+        executeFilterAction = true;
       }
     }
 
     if (executeFilterAction) {
-      if (overlayRowIndex == 0) {
+      if (overlayRowIndex == FR_CLEAR_ALL) {
+        clearAllFilters();
+      } else if (overlayRowIndex == FR_FANDOM) {
         // Fandom row: cycle if <= 4 fandoms, open full picker if > 4
         pickerItems.clear();
         pickerItems.push_back("Any");
@@ -628,7 +726,9 @@ if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
           }
           launchPicker(ScreenState::FANDOM_PICKER, targetIdx);
         }
-      } else if (overlayRowIndex == 1) {
+      } else if (overlayRowIndex == FR_CLEAR_FANDOM) {
+        clearFandomFilter();
+      } else if (overlayRowIndex == FR_REL) {
         // Relationship row: always opens a list picker if fandom is active
         if (pendingState.fandom[0] != '\0') {
           screenState = ScreenState::RELATIONSHIP_PICKER;
@@ -658,8 +758,50 @@ if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
           }
           launchPicker(ScreenState::RELATIONSHIP_PICKER, targetIdx);
         }
-      } else if (overlayRowIndex == 2) {
-        // Sort by cycle: Title -> Author -> Word Count -> Date Added -> Series -> Title
+      } else if (overlayRowIndex == FR_CLEAR_REL) {
+        pendingState.relationship[0] = '\0';
+        pendingState.relationshipNoneOnly = false;
+        folderTreeRelationship.clear();
+      } else if (overlayRowIndex == FR_TITLE) {
+        letterForTitle = true;
+        letterRow = 0;
+        letterCol = 0;
+        screenState = ScreenState::LETTER_GRID;
+      } else if (overlayRowIndex == FR_CLEAR_TITLE) {
+        pendingState.titleInitials = 0;
+      } else if (overlayRowIndex == FR_AUTHOR) {
+        letterForTitle = false;
+        letterRow = 0;
+        letterCol = 0;
+        screenState = ScreenState::LETTER_GRID;
+      } else if (overlayRowIndex == FR_CLEAR_AUTHOR) {
+        pendingState.authorInitials = 0;
+      } else if (overlayRowIndex == FR_STATUS) {
+        statusRow = 0;
+        screenState = ScreenState::STATUS_TICKS;
+      } else if (overlayRowIndex == FR_CLEAR_STATUS) {
+        pendingState.statusMask = 0;
+        pendingState.publicationMask = 0;
+        pendingState.favouriteOnly = false;
+        pendingState.combine = CombineMode::ALL;
+      } else if (overlayRowIndex == FR_TEXT) {
+        startActivityForResult(
+            std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, "Find text or tag", pendingState.textQuery,
+                                                    31),
+            [this](const ActivityResult& res) {
+              if (!res.isCancelled) {
+                if (const auto* typed = std::get_if<KeyboardResult>(&res.data)) {
+                  strncpy(pendingState.textQuery, typed->text.c_str(), 31);
+                  pendingState.textQuery[31] = '\0';
+                  sanitizeTextQuery(pendingState.textQuery, sizeof(pendingState.textQuery));
+                }
+              }
+              screenState = ScreenState::FILTER_PANEL;
+              requestUpdate(true);
+            });
+      } else if (overlayRowIndex == FR_CLEAR_TEXT) {
+        pendingState.textQuery[0] = '\0';
+      } else if (overlayRowIndex == FR_SORT) {
         switch (pendingState.sortMode) {
           case SortMode::ALPHABETIC: pendingState.sortMode = SortMode::AUTHOR; break;
           case SortMode::AUTHOR: pendingState.sortMode = SortMode::WORD_COUNT; break;
@@ -667,19 +809,143 @@ if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
           case SortMode::DATE_ADDED: pendingState.sortMode = SortMode::SERIES; break;
           case SortMode::SERIES: pendingState.sortMode = SortMode::ALPHABETIC; break;
         }
-      } else if (overlayRowIndex == 3) {
-        // Order cycle
+      } else if (overlayRowIndex == FR_ORDER) {
         pendingState.ascending = !pendingState.ascending;
-      } else if (overlayRowIndex == 4) {
-        // Confirm Button pressed
-        SortFilterState previous = activeState;
-        activeState = pendingState;
-        screenState = ScreenState::LIBRARY;
-        saveSortFilterState();
-        applyStateChange(previous, activeState);
+      } else if (overlayRowIndex == FR_APPLY) {
+        commitPendingFilters();
+        return;
       }
       requestUpdate(true);
       return;
+    }
+  }
+
+  // --- STATE: LETTER GRID ---
+  else if (screenState == ScreenState::LETTER_GRID) {
+    auto* mask = letterForTitle ? &pendingState.titleInitials : &pendingState.authorInitials;
+    if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+      screenState = ScreenState::FILTER_PANEL;
+      requestUpdate(true);
+      return;
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Left)) {
+      if (letterRow >= 4) letterCol = 0;
+      else letterCol = (letterCol + letterRowCount(letterRow) - 1) % letterRowCount(letterRow);
+      requestUpdate(true);
+      return;
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Right)) {
+      if (letterRow >= 4) letterCol = 1;
+      else letterCol = (letterCol + 1) % letterRowCount(letterRow);
+      requestUpdate(true);
+      return;
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Up)) {
+      letterRow = (letterRow + 4) % 5;
+      if (letterRow < 4 && letterCol >= letterRowCount(letterRow)) letterCol = letterRowCount(letterRow) - 1;
+      if (letterRow >= 4 && letterCol > 1) letterCol = 0;
+      requestUpdate(true);
+      return;
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Down)) {
+      letterRow = (letterRow + 1) % 5;
+      if (letterRow < 4 && letterCol >= letterRowCount(letterRow)) letterCol = letterRowCount(letterRow) - 1;
+      if (letterRow >= 4 && letterCol > 1) letterCol = 0;
+      requestUpdate(true);
+      return;
+    }
+    bool toggle = mappedInput.wasReleased(MappedInputManager::Button::Confirm);
+    int tx = 0, ty = 0;
+    if (mappedInput.wasScreenTapped(tx, ty)) {
+      const auto& metrics = UITheme::getInstance().getMetrics();
+      const int originY = metrics.topPadding + metrics.headerHeight + 28;
+      KeyBox keys[40];
+      const int n = layoutLetterKeys(renderer.getScreenWidth(), originY, keys, 40);
+      for (int i = 0; i < n; i++) {
+        if (tx >= keys[i].x && tx < keys[i].x + keys[i].w && ty >= keys[i].y && ty < keys[i].y + keys[i].h) {
+          if (keys[i].apply) {
+            letterRow = 4;
+            letterCol = 1;
+          } else if (keys[i].clear) {
+            letterRow = 4;
+            letterCol = 0;
+          } else {
+            letterRow = 0;
+            int seen = 0;
+            for (int r = 0; r < 4; r++) {
+              if (i < seen + letterRowCount(r)) {
+                letterRow = r;
+                letterCol = i - seen;
+                break;
+              }
+              seen += letterRowCount(r);
+            }
+          }
+          toggle = true;
+          break;
+        }
+      }
+    }
+    if (toggle) {
+      if (letterRow >= 4) {
+        if (letterCol == 1) {
+          commitPendingFilters();
+          return;
+        }
+        *mask = 0;
+      } else {
+        const char ch = letterAt(letterRow, letterCol);
+        const int bit = initialBit(static_cast<unsigned char>(ch));
+        if (bit >= 0) *mask ^= (uint64_t{1} << bit);
+      }
+      requestUpdate(true);
+    }
+  }
+
+  // --- STATE: STATUS TICKS ---
+  else if (screenState == ScreenState::STATUS_TICKS) {
+    if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+      screenState = ScreenState::FILTER_PANEL;
+      requestUpdate(true);
+      return;
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
+        mappedInput.wasReleased(MappedInputManager::Button::Left)) {
+      statusRow = (statusRow + kStatusRows - 1) % kStatusRows;
+      requestUpdate(true);
+      return;
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Down) ||
+        mappedInput.wasReleased(MappedInputManager::Button::Right)) {
+      statusRow = (statusRow + 1) % kStatusRows;
+      requestUpdate(true);
+      return;
+    }
+    bool toggle = mappedInput.wasReleased(MappedInputManager::Button::Confirm);
+    int tx = 0, ty = 0;
+    if (mappedInput.wasScreenTapped(tx, ty)) {
+      const int row = (ty - statusTop_) / statusPitch_;
+      if (row >= 0 && row < kStatusRows) {
+        statusRow = row;
+        toggle = true;
+      }
+    }
+    if (toggle) {
+      if (statusRow == 0) {
+        pendingState.combine = pendingState.combine == CombineMode::ALL ? CombineMode::ANY : CombineMode::ALL;
+      } else if (statusRow == 1) {
+        pendingState.favouriteOnly = !pendingState.favouriteOnly;
+      } else if (statusRow >= 2 && statusRow <= 6) {
+        pendingState.statusMask = static_cast<uint8_t>(pendingState.statusMask ^ (1u << (statusRow - 2)));
+      } else if (statusRow == 7) {
+        pendingState.publicationMask = static_cast<uint8_t>(pendingState.publicationMask ^ 0x01);
+      } else if (statusRow == 8) {
+        pendingState.publicationMask = static_cast<uint8_t>(pendingState.publicationMask ^ 0x02);
+      } else if (statusRow == 9) {
+        commitPendingFilters();
+        return;
+      }
+      requestUpdate(true);
     }
   }
 
@@ -892,6 +1158,14 @@ void Ao3LibraryActivity::render(RenderLock&& lock) {
     renderPicker();
     return;
   }
+  if (screenState == ScreenState::LETTER_GRID) {
+    renderLetterGrid();
+    return;
+  }
+  if (screenState == ScreenState::STATUS_TICKS) {
+    renderStatusTicks();
+    return;
+  }
 
   // MANAGE_PANEL is a full-screen composited: library background + bottom slide-up panel
   renderLibrary(lock);
@@ -1085,86 +1359,103 @@ void Ao3LibraryActivity::renderManagePanel() {
   }
 }
 
+void Ao3LibraryActivity::layoutFilterRows() {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int startY = 40;
+  const int hints = metrics.buttonHintsHeight > 0 ? metrics.buttonHintsHeight : kBottomArrowRaise;
+  const int overlayH = renderer.getScreenHeight() - hints - startY;
+  overlayTop_ = startY;
+  overlayBottom_ = startY + overlayH;
+  const int headerH = 28;
+  const int contentTop = startY + headerH;
+  const int contentH = overlayH - headerH - 4;
+
+  const int nameLine = std::max(14, renderer.getLineHeight(UI_12_FONT_ID));
+  const int smallLine = std::max(10, renderer.getLineHeight(SMALL_FONT_ID));
+  auto isName = [](int row) {
+    return row == FR_FANDOM || row == FR_REL || row == FR_TITLE || row == FR_AUTHOR || row == FR_STATUS ||
+           row == FR_TEXT;
+  };
+  auto isClear = [](int row) {
+    return row == FR_CLEAR_ALL || row == FR_CLEAR_FANDOM || row == FR_CLEAR_REL || row == FR_CLEAR_TITLE ||
+           row == FR_CLEAR_AUTHOR || row == FR_CLEAR_STATUS || row == FR_CLEAR_TEXT;
+  };
+
+  int nameH = nameLine + 12;
+  int clearH = smallLine + 4;
+  int tailH = nameLine + 12;
+  int afterClear = 18;
+  int betweenTail = 22;
+  auto usedHeight = [&]() {
+    int total = 0;
+    for (int i = 0; i < FR_COUNT; i++) {
+      total += isName(i) ? nameH : isClear(i) ? clearH : tailH;
+      if (isClear(i)) total += afterClear;
+      if (i == FR_SORT || i == FR_ORDER) total += betweenTail;
+    }
+    return total;
+  };
+  const int used = usedHeight();
+  if (used < contentH) {
+    const int extra = contentH - used;
+    afterClear += (extra * 2 / 3) / 7;
+    betweenTail += (extra / 3) / 2;
+  } else if (used > contentH) {
+    int over = used - contentH;
+    while (over > 0 && afterClear > 8) {
+      afterClear--;
+      over -= 7;
+    }
+    while (over > 0 && betweenTail > 10) {
+      betweenTail--;
+      over -= 2;
+    }
+    while (over > 0 && nameH > nameLine + 4) {
+      nameH--;
+      tailH--;
+      over -= 9;
+    }
+  }
+
+  int y = contentTop;
+  for (int i = 0; i < FR_COUNT; i++) {
+    filterRowY_[i] = y;
+    filterRowH_[i] = isName(i) ? nameH : isClear(i) ? clearH : tailH;
+    y += filterRowH_[i];
+    if (isClear(i)) y += afterClear;
+    if (i == FR_SORT || i == FR_ORDER) y += betweenTail;
+  }
+  overlayRow0Y_ = contentTop;
+  overlayRowPitch_ = nameH;
+}
+
 void Ao3LibraryActivity::renderFilterOverlay() {
   const int screenWidth = renderer.getScreenWidth();
-  const int overlayH = 320;
-  const int startY = 48;
+  const int margin = 12;
+  layoutFilterRows();
 
-  // Background white filled rectangle
-  renderer.fillRoundedRect(0, startY, screenWidth, overlayH, 0, White);
-  // Top black edge
-  renderer.fillRect(0, startY, screenWidth, 1, Black);
-  // Bottom edge has a 6-pixel-thick black line
-  for (int i = 0; i < 6; i++) {
-    renderer.drawLine(0, startY + overlayH - 6 + i, screenWidth, startY + overlayH - 6 + i);
-  }
+  renderer.fillRect(0, overlayTop_, screenWidth, overlayBottom_ - overlayTop_, false);
+  renderer.fillRect(0, overlayTop_, screenWidth, 1, true);
+  renderer.fillRect(0, overlayBottom_ - 2, screenWidth, 2, true);
+  renderer.drawText(UI_12_FONT_ID, margin + 8, overlayTop_ + 4, "Sort & Filter", true, EpdFontFamily::BOLD);
 
-  // Margins
-  const int margin = 20;
-
-  // Ubuntu 12pt Bold Header "Sort & Filter"
-  renderer.drawText(UI_12_FONT_ID, margin + 12, startY + 20, "Sort & Filter", true, EpdFontFamily::BOLD);
-
-  // helper to draw pill or label
-  auto drawOverlayRow = [&](int rowIndex, const char* label, const char* val, bool disabled = false) {
-    const int rowY = startY + 55 + rowIndex * 40 + ((rowIndex < 4) ? 6 : 0) + ((rowIndex == 2 || rowIndex == 3) ? 20 : 0);
-    const bool isSelected = (overlayRowIndex == rowIndex);
-
-    if (isSelected && !disabled) {
-      renderer.fillRoundedRect(margin, rowY - 6, screenWidth - (2 * margin), 34, 6, true, true, true, true, LightGray);
-    }
-
-    // Label text — always draw in black; dimming is handled via checkerboard dither below
-    renderer.drawText(UI_10_FONT_ID, margin + 12, rowY, label, true);
-
-    // Value text
-    if (isSelected && !disabled) {
-      // Draw black pill
-      int valW = renderer.getTextWidth(UI_10_FONT_ID, val);
-      int pillW = valW + 24;
-      int pillX = screenWidth - margin - pillW;
-      renderer.fillRoundedRect(pillX, rowY - 6, pillW, 34, 6, Black);
-      renderer.drawText(UI_10_FONT_ID, pillX + 12, rowY - 1, val, false);
-    } else {
-      // Plain right-aligned value text — always draw in black; dimming handled below
-      int valW = renderer.getTextWidth(UI_10_FONT_ID, val);
-      renderer.drawText(UI_10_FONT_ID, screenWidth - margin - valW - 12, rowY, val, true);
-    }
-
-    // Apply checkerboard dither over the entire row to create a dimmed/grayed-out effect
-    if (disabled) {
-      const int lineH = renderer.getLineHeight(UI_10_FONT_ID);
-      for (int py = rowY; py < rowY + lineH; py++)
-        for (int px = margin + 12; px < screenWidth - margin - 12; px++)
-          if ((px + py) % 2 == 0) renderer.drawPixel(px, py, false);
-    }
-  };
-
-  // 16-character truncation helper
-  auto getTruncatedValue = [](const char* src) -> std::string {
+  auto truncated = [](const char* src) -> std::string {
     if (!src || src[0] == '\0') return "Any";
     std::string raw(src);
-    if (raw.length() > 27) {
-      return raw.substr(0, 25) + "..";
-    }
+    if (raw.length() > 16) return raw.substr(0, 14) + "..";
     return raw;
   };
+  char initialBuf[24];
+  char statusBuf[16];
+  int ticks = 0;
+  for (int b = 0; b < 5; b++)
+    if (pendingState.statusMask & (1u << b)) ticks++;
+  if (pendingState.publicationMask & 0x01) ticks++;
+  if (pendingState.publicationMask & 0x02) ticks++;
+  if (pendingState.favouriteOnly) ticks++;
+  if (ticks == 0) strncpy(statusBuf, "Any", sizeof(statusBuf));
+  else snprintf(statusBuf, sizeof(statusBuf), "%d on", ticks);
 
-  // Row 0: Fandom
-  std::string fandomVal = getTruncatedValue(pendingState.fandom);
-  drawOverlayRow(0, "Fandom", fandomVal.c_str());
-
-  // Row 1: Relationship (disabled if fandom is "Any")
-  bool relDisabled = (pendingState.fandom[0] == '\0');
-  std::string relVal = "Any";
-  if (pendingState.relationshipNoneOnly) {
-    relVal = "None";
-  } else {
-    relVal = getTruncatedValue(pendingState.relationship);
-  }
-  drawOverlayRow(1, "Relationship", relVal.c_str(), relDisabled);
-
-  // Row 2: Sort By
   const char* sortLabel = "Title";
   switch (pendingState.sortMode) {
     case SortMode::ALPHABETIC: sortLabel = "Title"; break;
@@ -1173,30 +1464,153 @@ void Ao3LibraryActivity::renderFilterOverlay() {
     case SortMode::DATE_ADDED: sortLabel = "Date Added"; break;
     case SortMode::SERIES: sortLabel = "Series"; break;
   }
-  drawOverlayRow(2, "Sort by", sortLabel);
+  std::string relVal = pendingState.relationshipNoneOnly ? "None" : truncated(pendingState.relationship);
+  std::string fandomVal = truncated(pendingState.fandom);
+  std::string textVal = truncated(pendingState.textQuery);
 
-  // Row 3: Order
-  drawOverlayRow(3, "Order", pendingState.ascending ? "Ascending" : "Descending");
+  const int nameLine = renderer.getLineHeight(UI_12_FONT_ID);
+  const int smallLine = renderer.getLineHeight(SMALL_FONT_ID);
 
-  // Row 4: Confirm Button
-  const int btnY = startY + 250;
-  const int btnW = screenWidth - margin * 2;
-  const int btnH = 36;
-  const bool confirmSelected = (overlayRowIndex == 4);
+  for (int row = 0; row < FR_COUNT; row++) {
+    const int rowY = filterRowY_[row];
+    const int rowH = filterRowH_[row];
+    if (rowY + rowH > overlayBottom_) continue;
+    const bool selected = overlayRowIndex == row;
+    const bool clearRow = row == FR_CLEAR_ALL || row == FR_CLEAR_FANDOM || row == FR_CLEAR_REL ||
+                          row == FR_CLEAR_TITLE || row == FR_CLEAR_AUTHOR || row == FR_CLEAR_STATUS ||
+                          row == FR_CLEAR_TEXT;
+    const bool nameRow = row == FR_FANDOM || row == FR_REL || row == FR_TITLE || row == FR_AUTHOR ||
+                         row == FR_STATUS || row == FR_TEXT;
+    const bool disabled = row == FR_REL && pendingState.fandom[0] == '\0';
+    if (selected && !disabled) highlightRow(renderer, margin, rowY, screenWidth - 2 * margin, rowH);
 
-  if (confirmSelected) {
-    renderer.fillRoundedRect(margin, btnY, btnW, btnH, 8, Black);
-    renderer.drawRoundedRect(margin, btnY, btnW, btnH, 1, 8, true);
-    renderer.drawCenteredText(UI_12_FONT_ID, btnY + 2, "Confirm", false, EpdFontFamily::BOLD);
-  } else {
-    renderer.drawRoundedRect(margin, btnY, btnW, btnH, 1, 8, true);
-    renderer.drawCenteredText(UI_12_FONT_ID, btnY + 2, "Confirm", true, EpdFontFamily::BOLD);
+    const char* label = "";
+    const char* value = nullptr;
+    switch (row) {
+      case FR_CLEAR_ALL: label = "Clear all"; break;
+      case FR_FANDOM: label = "Fandom"; value = fandomVal.c_str(); break;
+      case FR_CLEAR_FANDOM: label = "Clear"; break;
+      case FR_REL: label = "Relationship"; value = relVal.c_str(); break;
+      case FR_CLEAR_REL: label = "Clear"; break;
+      case FR_TITLE:
+        formatInitialMask(pendingState.titleInitials, initialBuf, sizeof(initialBuf));
+        label = "Title starts";
+        value = initialBuf;
+        break;
+      case FR_CLEAR_TITLE: label = "Clear"; break;
+      case FR_AUTHOR:
+        formatInitialMask(pendingState.authorInitials, initialBuf, sizeof(initialBuf));
+        label = "Author starts";
+        value = initialBuf;
+        break;
+      case FR_CLEAR_AUTHOR: label = "Clear"; break;
+      case FR_STATUS: label = "Status"; value = statusBuf; break;
+      case FR_CLEAR_STATUS: label = "Clear"; break;
+      case FR_TEXT: label = "Text or tag"; value = textVal.c_str(); break;
+      case FR_CLEAR_TEXT: label = "Clear"; break;
+      case FR_SORT: label = "Sort by"; value = sortLabel; break;
+      case FR_ORDER: label = "Order"; value = pendingState.ascending ? "Ascending" : "Descending"; break;
+      case FR_APPLY: label = "Apply"; break;
+      default: break;
+    }
+    const int font = nameRow || row == FR_SORT || row == FR_ORDER || row == FR_APPLY ? UI_12_FONT_ID : SMALL_FONT_ID;
+    const int line = (font == UI_12_FONT_ID) ? nameLine : smallLine;
+    const int textY = rowY + (rowH - line) / 2;
+    if (clearRow) {
+      renderer.drawText(SMALL_FONT_ID, margin + 28, textY, label, true);
+    } else {
+      renderer.drawText(UI_12_FONT_ID, margin + 8, textY, label, true, EpdFontFamily::BOLD);
+    }
+    if (value && value[0]) {
+      const int valW = renderer.getTextWidth(UI_10_FONT_ID, value);
+      const int valueY = rowY + (rowH - smallLine) / 2;
+      renderer.drawText(UI_10_FONT_ID, screenWidth - margin - valW - 8, valueY, value, true);
+    }
+    if (disabled) {
+      for (int py = rowY; py < rowY + rowH; py++)
+        for (int px = margin; px < screenWidth - margin; px++)
+          if (((px + py) & 1) == 0) renderer.drawPixel(px, py, false);
+    }
   }
 }
 
-// ---------------------------------------------------------------------------
-//  renderPicker — draws full screen pickers
-// ---------------------------------------------------------------------------
+void Ao3LibraryActivity::renderLetterGrid() {
+  renderer.clearScreen();
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const char* title = letterForTitle ? "Title starts" : "Author starts";
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, renderer.getScreenWidth(), metrics.headerHeight}, title);
+  const int originY = metrics.topPadding + metrics.headerHeight + 28;
+  KeyBox keys[40];
+  const int n = layoutLetterKeys(renderer.getScreenWidth(), originY, keys, 40);
+  const uint64_t mask = letterForTitle ? pendingState.titleInitials : pendingState.authorInitials;
+  int cursor = 0;
+  for (int row = 0; row < 4; row++) {
+    for (int col = 0; col < letterRowCount(row); col++, cursor++) {
+      if (cursor >= n) break;
+      const bool on = (mask & (uint64_t{1} << initialBit(static_cast<unsigned char>(keys[cursor].ch)))) != 0;
+      const bool selected = letterRow == row && letterCol == col;
+      if (on) renderer.fillRect(keys[cursor].x, keys[cursor].y, keys[cursor].w, keys[cursor].h, true);
+      else if (selected)
+        highlightRow(renderer, keys[cursor].x, keys[cursor].y, keys[cursor].w, keys[cursor].h);
+      if (!on) strokeBox(renderer, keys[cursor].x, keys[cursor].y, keys[cursor].w, keys[cursor].h);
+      char label[2] = {keys[cursor].ch, 0};
+      drawLabelInBox(renderer, keys[cursor].x, keys[cursor].y, keys[cursor].w, keys[cursor].h, label, UI_12_FONT_ID,
+                     !on);
+    }
+  }
+  for (int i = cursor; i < n; i++) {
+    const KeyBox& key = keys[i];
+    const bool selected = letterRow >= 4 && ((key.clear && letterCol == 0) || (key.apply && letterCol == 1));
+    if (selected) highlightRow(renderer, key.x, key.y, key.w, key.h);
+    strokeBox(renderer, key.x, key.y, key.w, key.h);
+    drawLabelInBox(renderer, key.x, key.y, key.w, key.h, key.apply ? "Apply" : "Clear", UI_10_FONT_ID, true);
+  }
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_CONFIRM), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  renderer.displayBuffer();
+}
+
+void Ao3LibraryActivity::renderStatusTicks() {
+  renderer.clearScreen();
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, renderer.getScreenWidth(), metrics.headerHeight},
+                 "Status filter");
+  static const char* labels[kStatusRows] = {
+      "Combine",           "Favorite",         "Unread",
+      "Reading",           "Finished Reading", "Waiting for Chapter",
+      "New Chapter Available", "WIP",          "Completed in AO3",
+      "Apply"};
+  const int hintH = metrics.buttonHintsHeight > 0 ? metrics.buttonHintsHeight : kBottomArrowRaise;
+  statusTop_ = metrics.topPadding + metrics.headerHeight + 12;
+  int avail = renderer.getScreenHeight() - hintH - 8 - statusTop_;
+  statusPitch_ = avail / kStatusRows;
+  if (statusPitch_ > 34) statusPitch_ = 34;
+  if (statusPitch_ < 26) statusPitch_ = 26;
+  const int margin = 16;
+  for (int i = 0; i < kStatusRows; i++) {
+    const int y = statusTop_ + i * statusPitch_;
+    if (i == statusRow) highlightRow(renderer, 8, y - 2, renderer.getScreenWidth() - 16, statusPitch_ - 2);
+    bool on = false;
+    if (i == 1) on = pendingState.favouriteOnly;
+    else if (i >= 2 && i <= 6) on = (pendingState.statusMask & (1u << (i - 2))) != 0;
+    else if (i == 7) on = (pendingState.publicationMask & 0x01) != 0;
+    else if (i == 8) on = (pendingState.publicationMask & 0x02) != 0;
+    if (i == 0) {
+      renderer.drawText(UI_10_FONT_ID, margin, y, labels[i], true);
+      const char* mode = pendingState.combine == CombineMode::ANY ? "Any" : "All";
+      const int tw = renderer.getTextWidth(UI_10_FONT_ID, mode);
+      renderer.drawText(UI_10_FONT_ID, renderer.getScreenWidth() - margin - tw, y, mode, true, EpdFontFamily::BOLD);
+    } else if (i == 9) {
+      renderer.drawText(UI_10_FONT_ID, margin, y, labels[i], true, EpdFontFamily::BOLD);
+    } else {
+      drawTickBox(renderer, margin, y, on);
+      renderer.drawText(UI_10_FONT_ID, margin + 24, y, labels[i], true);
+    }
+  }
+  const auto hints = mappedInput.mapLabels(tr(STR_BACK), tr(STR_CONFIRM), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  GUI.drawButtonHints(renderer, hints.btn1, hints.btn2, hints.btn3, hints.btn4);
+  renderer.displayBuffer();
+}
 
 void Ao3LibraryActivity::renderPicker() {
   const auto& metrics = UITheme::getInstance().getMetrics();
@@ -1305,12 +1719,20 @@ void Ao3LibraryActivity::renderEntry(RenderLock& lock, int y, const ViewEntry& v
     blockY += 10;
 
     char metaBuf[128];
-    if (meta.updatedDate[0] != '\0') {
-      sprintf(metaBuf, "Chapters: %d   Words: %lu   Updated: %s",
-              meta.chapterCount, (unsigned long)meta.wordCount, meta.updatedDate);
+    char chapters[32];
+    const uint16_t planned = pageCachePlanned[cacheSlot];
+    if (planned > 0) {
+      snprintf(chapters, sizeof(chapters), "Chapters: %u/%u", meta.chapterCount, planned);
+    } else if (meta.isCompleted && meta.chapterCount > 0) {
+      snprintf(chapters, sizeof(chapters), "Chapters: %u/%u", meta.chapterCount, meta.chapterCount);
     } else {
-      sprintf(metaBuf, "Chapters: %d   Words: %lu",
-              meta.chapterCount, (unsigned long)meta.wordCount);
+      snprintf(chapters, sizeof(chapters), "Chapters: %u/?", meta.chapterCount);
+    }
+    if (meta.updatedDate[0] != '\0') {
+      snprintf(metaBuf, sizeof(metaBuf), "%s   Words: %lu   Updated: %s", chapters, (unsigned long)meta.wordCount,
+               meta.updatedDate);
+    } else {
+      snprintf(metaBuf, sizeof(metaBuf), "%s   Words: %lu", chapters, (unsigned long)meta.wordCount);
     }
     renderer.drawText(SMALL_FONT_ID, margin, blockY, metaBuf);
   }
@@ -1452,6 +1874,13 @@ void Ao3LibraryActivity::loadSortFilterState() {
   activeState.relationshipNoneOnly = false;
   activeState.sortMode  = SortMode::ALPHABETIC;
   activeState.ascending = true;
+  activeState.titleInitials = 0;
+  activeState.authorInitials = 0;
+  activeState.statusMask = 0;
+  activeState.publicationMask = 0;
+  activeState.favouriteOnly = false;
+  activeState.combine = CombineMode::ALL;
+  activeState.textQuery[0] = '\0';
 
   const char* path = "/.crosspoint/ao3SortFilterState.json";
   if (!Storage.exists(path)) return;
@@ -1467,6 +1896,19 @@ void Ao3LibraryActivity::loadSortFilterState() {
   activeState.relationshipNoneOnly = doc["relationshipNoneOnly"] | false;
   activeState.sortMode  = static_cast<SortMode>(doc["sortMode"] | 0);
   activeState.ascending = doc["ascending"] | true;
+  activeState.titleInitials = strtoull(doc["titleInitials"] | "0", nullptr, 16);
+  activeState.authorInitials = strtoull(doc["authorInitials"] | "0", nullptr, 16);
+  activeState.statusMask = doc["statusMask"] | 0;
+  activeState.publicationMask = doc["publicationMask"] | 0;
+  activeState.favouriteOnly = doc["favouriteOnly"] | false;
+  activeState.combine = static_cast<CombineMode>(doc["combine"] | 0);
+  char loadedQuery[32];
+  strncpy(loadedQuery, doc["textQuery"] | "", 31);
+  loadedQuery[31] = '\0';
+  strncpy(activeState.textQuery, loadedQuery, 31);
+  activeState.textQuery[31] = '\0';
+  sanitizeTextQuery(activeState.textQuery, sizeof(activeState.textQuery));
+  const bool queryChanged = strcmp(loadedQuery, activeState.textQuery) != 0;
 
   if (activeState.sortMode > SortMode::AUTHOR)
     activeState.sortMode = SortMode::ALPHABETIC;
@@ -1492,6 +1934,7 @@ void Ao3LibraryActivity::loadSortFilterState() {
     folderTreeFandom       = doc["folderTreeFandom"]       | std::string(activeState.fandom);
     folderTreeRelationship = doc["folderTreeRelationship"] | std::string(activeState.relationship);
   }
+  if (queryChanged) saveSortFilterState();
 }
 
 void Ao3LibraryActivity::saveSortFilterState() const {
@@ -1501,6 +1944,17 @@ void Ao3LibraryActivity::saveSortFilterState() const {
   doc["relationshipNoneOnly"] = activeState.relationshipNoneOnly;
   doc["sortMode"]             = static_cast<uint8_t>(activeState.sortMode);
   doc["ascending"]            = activeState.ascending;
+  char titleMask[20];
+  char authorMask[20];
+  snprintf(titleMask, sizeof(titleMask), "%llx", static_cast<unsigned long long>(activeState.titleInitials));
+  snprintf(authorMask, sizeof(authorMask), "%llx", static_cast<unsigned long long>(activeState.authorInitials));
+  doc["titleInitials"] = titleMask;
+  doc["authorInitials"] = authorMask;
+  doc["statusMask"] = activeState.statusMask;
+  doc["publicationMask"] = activeState.publicationMask;
+  doc["favouriteOnly"] = activeState.favouriteOnly;
+  doc["combine"] = static_cast<uint8_t>(activeState.combine);
+  doc["textQuery"] = activeState.textQuery;
   doc["filterMode"]           = static_cast<uint8_t>(filterMode);
   if (filterMode == FilterMode::FOLDER_TREE) {
     doc["folderTreeFandom"]       = folderTreeFandom;
@@ -1573,12 +2027,38 @@ void Ao3LibraryActivity::resortViewEntries() {
 //  Filtering Logic
 // ---------------------------------------------------------------------------
 
+void Ao3LibraryActivity::commitPendingFilters() {
+  SortFilterState previous = activeState;
+  activeState = pendingState;
+  screenState = ScreenState::LIBRARY;
+  saveSortFilterState();
+  applyStateChange(previous, activeState);
+  requestUpdate(true);
+}
+
+void Ao3LibraryActivity::clearFandomFilter() {
+  pendingState.fandom[0] = '\0';
+  pendingState.relationship[0] = '\0';
+  pendingState.relationshipNoneOnly = false;
+  folderTreeFandom.clear();
+  folderTreeRelationship.clear();
+}
+
+void Ao3LibraryActivity::clearAllFilters() {
+  clearFandomFilter();
+  pendingState.titleInitials = 0;
+  pendingState.authorInitials = 0;
+  pendingState.statusMask = 0;
+  pendingState.publicationMask = 0;
+  pendingState.favouriteOnly = false;
+  pendingState.combine = CombineMode::ALL;
+  pendingState.textQuery[0] = '\0';
+}
+
 bool Ao3LibraryActivity::passesFilter(const ViewEntry& v, const FilterHashes& h) const {
   if (filterMode == FilterMode::FOLDER_TREE) {
-      return std::binary_search(allowedHashes.begin(), allowedHashes.end(), v.cacheHash);
-  }
-
-  if (h.fandomActive) {
+      if (!std::binary_search(allowedHashes.begin(), allowedHashes.end(), v.cacheHash)) return false;
+  } else if (h.fandomActive) {
     if (Ao3TagMergeStore::resolveFandom(v.fandomHash) != h.fandomHash) return false;
     if (h.relationshipNoneOnly) {
       if (v.rel1Hash != 0 || v.rel2Hash != 0) return false;
@@ -1587,12 +2067,83 @@ bool Ao3LibraryActivity::passesFilter(const ViewEntry& v, const FilterHashes& h)
         Ao3TagMergeStore::resolveRelationship(v.rel2Hash) != h.relationshipHash) return false;
     }
   }
+
+  if (!initialPasses(activeState.titleInitials, v.title)) return false;
+  if (!initialPasses(activeState.authorInitials, v.authorKey)) return false;
+
+  const bool statusOn = activeState.statusMask != 0;
+  const bool pubOn = activeState.publicationMask != 0;
+  const bool favOn = activeState.favouriteOnly;
+  if (statusOn || pubOn || favOn) {
+    uint8_t status = v.filterBits & kFilterStatusMask;
+    if (status == 5) status = 0;  // Marked for Later counts as Unread
+    const bool statusHit = statusOn && status <= 4 && (activeState.statusMask & (1u << status)) != 0;
+    const bool completed = (v.filterBits & kFilterMetaCompleted) != 0;
+    const bool pubHit = (activeState.publicationMask & 0x01 && !completed) ||
+                        (activeState.publicationMask & 0x02 && completed);
+    const bool favHit = favOn && (v.filterBits & kFilterFavourite) != 0;
+    if (activeState.combine == CombineMode::ANY) {
+      if (!statusHit && !pubHit && !favHit) return false;
+    } else {
+      if (statusOn && !statusHit) return false;
+      if (pubOn && !pubHit) return false;
+      if (favOn && !favHit) return false;
+    }
+  }
   return true;
 }
 
 void Ao3LibraryActivity::rebuildViewEntries() {
   viewEntries.clear();
+  Ao3Librarian::syncPublicationFlags();
   const char* indexPath = "/.crosspoint/ao3_library_index.bin";
+
+  SearchToken tokens[8];
+  const int tokenCount = parseSearchTokens(activeState.textQuery, tokens, 8);
+  const bool hasInclude = hasSearchToken(tokens, tokenCount, false);
+  const bool hasExclude = hasSearchToken(tokens, tokenCount, true);
+  const bool wantText = hasInclude || hasExclude;
+
+  struct TagFlag {
+    uint32_t hash;
+    bool positive;
+    bool excluded;
+  };
+  struct TagScan {
+    const SearchToken* tokens;
+    int count;
+    std::vector<TagFlag>* rows;
+  };
+  std::vector<TagFlag> tagRows;
+  if (wantText) {
+    if (!Storage.exists(Ao3Librarian::kTagSearchPath)) Ao3Librarian::rebuildTagSearch();
+    TagScan scan{tokens, tokenCount, &tagRows};
+    Ao3Librarian::scanTagSearch(
+        [](uint32_t hash, const char* text, size_t textLen, void* raw) {
+          auto* ctx = static_cast<TagScan*>(raw);
+          const bool positive = anyTokenIn(text, textLen, ctx->tokens, ctx->count, false);
+          const bool excluded = anyTokenIn(text, textLen, ctx->tokens, ctx->count, true);
+          for (TagFlag& row : *ctx->rows) {
+            if (row.hash == hash) {
+              row.positive = positive;
+              row.excluded = excluded;
+              return;
+            }
+          }
+          if (positive || excluded) ctx->rows->push_back(TagFlag{hash, positive, excluded});
+        },
+        &scan);
+  }
+  std::vector<uint32_t> tagPositive;
+  std::vector<uint32_t> tagExcluded;
+  tagPositive.reserve(tagRows.size());
+  tagExcluded.reserve(tagRows.size());
+  for (const TagFlag& row : tagRows) {
+    if (row.positive) tagPositive.push_back(row.hash);
+    if (row.excluded) tagExcluded.push_back(row.hash);
+  }
+  std::sort(tagPositive.begin(), tagPositive.end());
+  std::sort(tagExcluded.begin(), tagExcluded.end());
 
   if (!Storage.exists(indexPath)) {
     indexState = IndexState::MISSING;
@@ -1670,9 +2221,21 @@ void Ao3LibraryActivity::rebuildViewEntries() {
     if (rec.flags & 0x01) continue;           // Skip tombstone
     if (hideFinished && (rec.flags & 0x02)) continue; // Skip finished
     ViewEntry v = buildViewEntry(rec);
-    if (passesFilter(v, filterHashes)) {
-      viewEntries.push_back(v);
+    if (!passesFilter(v, filterHashes)) {
+      yield();
+      continue;
     }
+    if (wantText) {
+      const bool positive = !hasInclude || compactTextMatch(rec, tokens, tokenCount, false) ||
+                            std::binary_search(tagPositive.begin(), tagPositive.end(), rec.cacheHash);
+      const bool excluded = (hasExclude && compactTextMatch(rec, tokens, tokenCount, true)) ||
+                            std::binary_search(tagExcluded.begin(), tagExcluded.end(), rec.cacheHash);
+      if (!positive || excluded) {
+        yield();
+        continue;
+      }
+    }
+    viewEntries.push_back(v);
     yield();
   }
   f.close();
@@ -1688,16 +2251,17 @@ void Ao3LibraryActivity::rebuildViewEntries() {
 }
 
 void Ao3LibraryActivity::applyStateChange(const SortFilterState& prev, const SortFilterState& next) {
-  bool filterChanged =
-      strcmp(prev.fandom,       next.fandom)       != 0 ||
-      strcmp(prev.relationship, next.relationship)  != 0 ||
-      prev.relationshipNoneOnly != next.relationshipNoneOnly;
+  bool filterChanged = filterFieldsDiffer(prev, next);
 
   bool sortChanged =
       prev.sortMode  != next.sortMode ||
       prev.ascending != next.ascending;
 
-  if (filterMode == FilterMode::FOLDER_TREE && filterChanged) {
+  const bool treeChanged = strcmp(prev.fandom, next.fandom) != 0 ||
+                           strcmp(prev.relationship, next.relationship) != 0 ||
+                           prev.relationshipNoneOnly != next.relationshipNoneOnly;
+
+  if (filterMode == FilterMode::FOLDER_TREE && treeChanged) {
       allowedHashes.clear();
       if (next.fandom[0] != '\0') {
           std::string scanPath = ao3Folder;
@@ -1924,7 +2488,7 @@ void Ao3LibraryActivity::confirmPickerSelection(int selectedIndex) {
         folderTreeRelationship.clear();
       }
     }
-    overlayRowIndex = (pendingState.fandom[0] != '\0') ? 1 : 2;
+    overlayRowIndex = (pendingState.fandom[0] != '\0') ? FR_REL : FR_TITLE;
   } else { // RELATIONSHIP_PICKER
     if (selectedIndex == 0) {
       pendingState.relationship[0] = '\0';
@@ -1941,7 +2505,7 @@ void Ao3LibraryActivity::confirmPickerSelection(int selectedIndex) {
       if (filterMode == FilterMode::FOLDER_TREE)
         folderTreeRelationship = pickerItems[selectedIndex];
     }
-    overlayRowIndex = 2;
+    overlayRowIndex = FR_TITLE;
   }
   closeRouting();
   pickerRowItems.clear();

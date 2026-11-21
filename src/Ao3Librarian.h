@@ -65,11 +65,22 @@ class Ao3Librarian {
    */
   static bool writeIndexRecord(const CompactIndexRecord& rec);
 
+  // /.crosspoint/ao3_tag_text.tsv — the same file the computer indexer writes.
+  // One line: 8 hex digits, the book path, then the tag text.
+  static const char* kTagSearchPath;
+  static void appendTagSearch(uint32_t hash, const char tags[4][16]);
+  static bool rebuildTagSearch();
+  using TagSearchFn = void (*)(uint32_t hash, const char* text, size_t textLen, void* ctx);
+  static void scanTagSearch(TagSearchFn fn, void* ctx);
+
   /**
    * @brief Marks a record as tombstoned (deleted) in the index.
    */
   static bool tombstoneRecord(const std::string& epubPath);
   static bool setRecordFinished(const std::string& epubPath, bool finished);
+  static bool setRecordFlag(const std::string& epubPath, uint8_t bit, bool on);
+  static bool setRecordStatus(const std::string& epubPath, uint8_t status);
+  static int getRecordFlags(const std::string& epubPath);
 
   /**
    * @brief Tombstones any index record whose epub file or ao3_library_info
@@ -77,6 +88,9 @@ class Ao3Librarian {
    * @return Number of records tombstoned, or -1 on index open failure.
    */
   static int sanitizeIndex();
+
+  // Copies complete/WIP and the reading status into the index. Runs once.
+  static bool syncPublicationFlags();
 
  private:
   static inline const char* lastScrapeFailure_ = nullptr;
@@ -89,5 +103,6 @@ class Ao3Librarian {
                              std::string& scrapedDate,
                              char* scrapedFandom,
                              char* scrapedRel1,
-                             char* scrapedRel2);
+                             char* scrapedRel2,
+                             uint16_t* plannedChapters);
 };

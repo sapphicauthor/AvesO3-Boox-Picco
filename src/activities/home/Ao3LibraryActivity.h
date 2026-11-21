@@ -59,6 +59,8 @@ class Ao3LibraryActivity final : public Activity, private UiAppHost {
     FILTER_PANEL,
     FANDOM_PICKER,
     RELATIONSHIP_PICKER,
+    LETTER_GRID,
+    STATUS_TICKS,
     MANAGE_PANEL
   };
 
@@ -73,6 +75,7 @@ class Ao3LibraryActivity final : public Activity, private UiAppHost {
   Ao3LibraryMetadata      pageCache[3];
   BookStatus              pageCacheStatus[3] = {BookStatus::START, BookStatus::START, BookStatus::START};
   int                     pageCacheMarkedPosition[3] = {-1, -1, -1};
+  uint16_t                pageCachePlanned[3] = {0, 0, 0};
   std::vector<std::string> wrappedSummary[3];
   int  cachedPage  = -1;
   bool buttonsSetup = false;
@@ -90,8 +93,21 @@ class Ao3LibraryActivity final : public Activity, private UiAppHost {
   std::string folderTreeRelationship;
   
   std::vector<uint32_t> allowedHashes;
-  int overlayRowIndex = 0; // 0=Fandom, 1=Relationship, 2=Sort By, 3=Order, 4=Confirm
+  int overlayRowIndex = 0;
+  int overlayScroll_ = 0;
   int managePanelRowIndex = 0; // 0=Index New Books, 1=AO3 Library Settings
+  int overlayTop_ = 48;
+  int overlayBottom_ = 368;
+  int overlayRow0Y_ = 90;
+  int overlayRowPitch_ = 32;
+  int filterRowY_[16] = {};
+  int filterRowH_[16] = {};
+  int letterRow = 0;
+  int letterCol = 0;
+  bool letterForTitle = true;
+  int statusRow = 0;
+  int statusTop_ = 0;
+  int statusPitch_ = 36;
 
   // Pickers support
   std::vector<std::string> uniqueFandoms;
@@ -146,6 +162,12 @@ class Ao3LibraryActivity final : public Activity, private UiAppHost {
   // Rendering subsets
   void renderLibrary(RenderLock& lock);
   void renderFilterOverlay();
+  void layoutFilterRows();
+  void renderLetterGrid();
+  void renderStatusTicks();
   void renderPicker();
   void renderManagePanel();
+  void commitPendingFilters();
+  void clearAllFilters();
+  void clearFandomFilter();
 };

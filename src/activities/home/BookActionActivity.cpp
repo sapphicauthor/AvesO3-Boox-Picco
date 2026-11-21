@@ -1,4 +1,7 @@
 #include "BookActionActivity.h"
+
+#include "../../Ao3Librarian.h"
+#include "../../Ao3LibraryQuery.h"
 #include "../Ao3ArchiveHelper.h"
 
 #include <Epub.h>
@@ -15,10 +18,28 @@
 #include "Ao3NewChaptersStore.h"
 #include "Ao3WipsStore.h"
 #include "Ao3MarkedForLaterStore.h"
+#include "../reader/ProgressFile.h"
 #include "Ao3LibraryMetadata.h"
 #include "../reader/Ao3EndOfBookSeriesActivity.h"
 
 #include "fontIds.h"
+
+namespace {
+void drawHeartGlyph(GfxRenderer& renderer, int x, int y, bool filled, int scale) {
+  // 9x8 heart, scaled. Outline when off, solid when on. E-ink has no gray.
+  static const uint16_t solid[8] = {0b011001100, 0b111111110, 0b111111110, 0b111111110,
+                                     0b011111100, 0b001111000, 0b000110000, 0b000010000};
+  static const uint16_t outline[8] = {0b011001100, 0b100110010, 0b100000010, 0b100000010,
+                                       0b010000100, 0b001001000, 0b000110000, 0b000010000};
+  const uint16_t* rows = filled ? solid : outline;
+  for (int py = 0; py < 8; py++) {
+    for (int px = 0; px < 9; px++) {
+      if (rows[py] & (1u << (8 - px)))
+        renderer.fillRect(x + px * scale, y + py * scale, scale, scale, true);
+    }
+  }
+}
+}  // namespace
 
 namespace fui = freeink::ui;
 
@@ -69,6 +90,7 @@ int BookActionActivity::logicalRow(int visual) const {
 
   // FULL mode
   int idx = 0;
+  if (hasAo3LibraryInfo) { if (visual == idx) return 8; idx++; } // Mark as Favorite
   if (isEpub || isXtc)   { if (visual == idx) return 0; idx++; } // Status cycle
   if (hasAo3LibraryInfo) { if (visual == idx) return 1; idx++; } // Mark for Later
   if (hasAo3LibraryInfo) { if (visual == idx) return 6; idx++; } // Show AO3 Page QR
@@ -88,6 +110,7 @@ int BookActionActivity::listCount() const {
   }
 
   int n = 1;                      // Delete always present
+  if (hasAo3LibraryInfo)    n++;  // Mark as Favorite
   if (isEpub || isXtc)      n++;  // Status
   if (hasAo3LibraryInfo)    n++;  // Mark for Later
   if (hasAo3LibraryInfo)    n++;  // Show AO3 Page QR
@@ -136,6 +159,10 @@ void BookActionActivity::onEnter() {
     MARKED_FOR_LATER_STORE.loadFromFile();
   }
   isMarkedForLater = MARKED_FOR_LATER_STORE.contains(filePath);
+  if (hasAo3LibraryInfo) {
+    const int flags = Ao3Librarian::getRecordFlags(filePath);
+    isFavourite = flags >= 0 && (flags & kIndexFavourite) != 0;
+  }
 
   const int maxIdx = listCount() - 1;
   if (nav.selected > maxIdx) nav.selected = maxIdx;
@@ -184,6 +211,7 @@ void BookActionActivity::buildScreen(UiScreen& uiScreen) {
       case 5: rowTitles[i] = "Remove from List"; break;
       case 6: rowTitles[i] = "Show AO3 Page QR"; break;
       case 7: rowTitles[i] = "Show Series"; break;
+      case 8: rowTitles[i] = "Mark as Favorite"; break;
     }
 
     if (logicalRow(i) == 1) {
@@ -217,12 +245,35 @@ void BookActionActivity::buildScreen(UiScreen& uiScreen) {
   syncListViewport(uiScreen, props, false);
   uiScreen.list(props);
 
-  // Dither mask over the disabled Status row (always visual row 0)
-  if (currentStatus == BookStatus::MARKED_FOR_LATER && nav.top == 0) {
-    const int pyEnd = std::min(body.y + rowH, body.y + body.height);
-    for (int py = body.y; py < pyEnd; py++)
-      for (int px = body.x; px < body.x + body.width; px++)
-        if ((px + py) % 2 == 0) renderer.drawPixel(px, py, false);
+  int favVisual = -1;
+  int statusVisual = -1;
+  for (int i = 0; i < count; i++) {
+    if (logicalRow(i) == 8) favVisual = i;
+    if (logicalRow(i) == 0) statusVisual = i;
+  }
+  if (favVisual >= nav.top) {
+    int scale = 3;
+    if (rowH < 8 * scale + 8) scale = 2;
+    const int heartW = 9 * scale;
+    const int heartH = 8 * scale;
+    const int rowTop = body.y + (favVisual - nav.top) * rowH;
+    const int inset = (rowH - heartH) / 2;
+    const int hy = rowTop + inset;
+    const int hx = body.x + body.width - inset - heartW;
+    if (inset > 0 && hy >= body.y && hy + heartH <= body.y + body.height) {
+      drawHeartGlyph(renderer, hx, hy, isFavourite, scale);
+    }
+  }
+
+  // Dither mask over the disabled Status row
+  if (currentStatus == BookStatus::MARKED_FOR_LATER && statusVisual >= nav.top) {
+    const int py0 = body.y + (statusVisual - nav.top) * rowH;
+    if (py0 < body.y + body.height) {
+      const int pyEnd = std::min(py0 + rowH, body.y + body.height);
+      for (int py = std::max(py0, (int)body.y); py < pyEnd; py++)
+        for (int px = body.x; px < body.x + body.width; px++)
+          if ((px + py) % 2 == 0) renderer.drawPixel(px, py, false);
+    }
   }
 }
 
@@ -475,6 +526,15 @@ void BookActionActivity::activateIndex(int index) {
       break;
     }
 
+    case 8: {
+      isFavourite = !isFavourite;
+      Ao3Librarian::setRecordFlag(filePath, kIndexFavourite, isFavourite);
+      const std::string cachePath = "/.crosspoint/epub_" + std::to_string(std::hash<std::string>{}(filePath));
+      ProgressFile::setFavourite(cachePath, isFavourite);
+      requestUpdate(true);
+      break;
+    }
+
     default:
       break;
   }
@@ -489,22 +549,21 @@ void BookActionActivity::saveStatus() {
   HalFile f;
 
   uint8_t data[11] = {0};
-  data[10] = static_cast<uint8_t>(currentStatus);  // byte 10 = status
-  if (Storage.openFileForRead("BROWSER", cachePath + "/progress.bin", f)) {
+  data[10] = static_cast<uint8_t>(currentStatus);
+  const std::string progressPath = cachePath + "/progress.bin";
+  if (Storage.openFileForRead("BROWSER", progressPath, f)) {
     f.read(data, 10);  // preserve bytes 0-9
     f.close();
   }
   data[10] = static_cast<uint8_t>(currentStatus);
-  if (Storage.openFileForWrite("BROWSER", cachePath + "/progress.bin", f)) {
-    f.write(data, 11);
-    f.close();
-  }
+  ProgressFile::writePreservingFavourite(cachePath, data, 11);
 
   if (hasAo3LibraryInfo) {
     bool isNowFinished = (currentStatus == BookStatus::FINISHED);
     bool wasFinished   = (initialStatus  == BookStatus::FINISHED);
     if (isNowFinished != wasFinished)
       Ao3Librarian::setRecordFinished(filePath, isNowFinished);
+    Ao3Librarian::setRecordStatus(filePath, static_cast<uint8_t>(currentStatus));
   }
 
   if (currentStatus == BookStatus::MARKED_FOR_LATER) {
