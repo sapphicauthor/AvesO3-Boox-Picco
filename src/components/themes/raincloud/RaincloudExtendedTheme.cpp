@@ -10,10 +10,10 @@
 void RaincloudExtendedTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
                                                  const std::vector<RecentBook>& recentBooks, const int selectorIndex,
                                                  bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,
-                                                 std::function<bool()> storeCoverBuffer) const {
+                                                 std::function<bool()> storeCoverBuffer, int progress) const {
   const Lyra3CoversTheme coverTheme;
   coverTheme.drawRecentBookCover(renderer, rect, recentBooks, selectorIndex, coverRendered, coverBufferStored,
-                                 bufferRestored, std::move(storeCoverBuffer));
+                                 bufferRestored, std::move(storeCoverBuffer), progress);
 
   // The selected tile's title sits in the gray box under its cover (layout of
   // Lyra3CoversTheme::drawRecentBookCover, whose selection padding is 8 px).

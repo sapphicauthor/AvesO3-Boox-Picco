@@ -20,6 +20,7 @@
 #include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
+#include "util/BookProgress.h"
 #include "fontIds.h"
 #include "../../Ao3Librarian.h"
 
@@ -153,6 +154,10 @@ void HomeActivity::onEnter() {
   coverBufferStored = false;
   const auto& metrics = UITheme::getInstance().getMetrics();
   loadRecentBooks(metrics.homeRecentBooksCount);
+  continueReadingProgress = -1;
+  if (!recentBooks.empty() && SETTINGS.uiTheme == CrossPointSettings::LYRA) {
+    continueReadingProgress = loadBookProgress(recentBooks.front().path);
+  }
 
   const auto base = static_cast<int>(recentBooks.size());
   selectorIndex = 0;
@@ -503,7 +508,7 @@ void HomeActivity::render(RenderLock&&) {
 
   GUI.drawRecentBookCover(renderer, Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight},
                           recentBooks, selectorIndex, coverRendered, coverBufferStored, bufferRestored,
-                          std::bind(&HomeActivity::storeCoverBuffer, this));
+                          std::bind(&HomeActivity::storeCoverBuffer, this), continueReadingProgress);
 
   std::vector<const char*> menuItems;
   std::vector<UIIcon> menuIcons;

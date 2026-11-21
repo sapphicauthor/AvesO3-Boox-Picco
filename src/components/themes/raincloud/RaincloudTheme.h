@@ -20,6 +20,10 @@ class RaincloudTheme : public LyraTheme {
   bool homeFrameUnchanged() const override { return frameUnchanged; }
   void homeFrameShown(const GfxRenderer& renderer) const override;
   void fillSelectionBackground(const GfxRenderer& renderer, int x, int y, int width, int height) const override;
+  // Raincloud keeps its own continue-reading tile: Lyra's layout without the reading progress.
+  void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
+                           const int selectorIndex, bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,
+                           std::function<bool()> storeCoverBuffer, int progress) const override;
 
  protected:
   // Marks a gray selection box whose text gets the home outline: within it,

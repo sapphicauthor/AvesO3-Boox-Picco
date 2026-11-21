@@ -19,6 +19,7 @@ class HomeActivity final : public Activity {
   bool firstRenderDone = false;
   bool hasOpdsServers = false;
   bool hasAo3Library = false;
+  int continueReadingProgress = -1;  // Lyra's progress line for the first recent book, -1 = none
   bool coverRendered = false;      // Track if cover has been rendered once
   bool coverBufferStored = false;  // Track if cover buffer is stored
   // Home can be entered while Back is still held (e.g. leaving Settings with
