@@ -18,7 +18,9 @@ is done.
    failing to index; Raincloud background, outline and refreshes passed 2026-11-21)**, only when the
    owner says so: Flip Picco and
    its full refresh, the PIN screen ignoring gestures, each Slide Switch mode, gray images and
-   sleep images, AO3 folder indexing (the Failed Books page and the failure log).
+   sleep images, AO3 folder indexing (the Failed Books page and the failure log), and the AO3
+   library Sort & Filter from the DalysLibrary fork (Library Cleanup first, then filters, search,
+   Favorite, chapter counts, and memory with a large library).
 
 Checked and closed: sleep screen and 4-level images (CrossPoint's versions), AO3 indexing (matches
 the device), SecureHttpClient (all differences come from the SDK), the settings loader (same keys
@@ -32,6 +34,8 @@ and messages as the device), and the crash record (fixed by d88550a2).
 - AvesO3 1.6.5 merge once upstream finishes it, and the AO3 Bookmarks feature.
 - After a low-memory skip, restart silently and resume indexing (AvesO3 1.6.5's restart), so
   fewer books are skipped on long runs.
+- Bluetooth page turner (CrossPoint fecee610, 0727f9f0). CrossPoint leaves Bluetooth off on the
+  Picco, because its USB Drive mode build uses the prebuilt core without the Bluetooth settings.
 - Picco emulation for screenshot tests ([eink-qemu](https://github.com/serialx/eink-qemu)).
 - Study the Boox `.opub` format.
 - Ideas from the stock Boox firmware: reading statistics, home widgets, an image gallery with

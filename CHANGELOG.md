@@ -78,6 +78,14 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
 - EPUBs whose zip end record is more than 1 KB from the end (a long comment or trailing bytes)
   open now; the search covers the 64 KB the zip format allows. (a6b73dbb)
 
+### AO3 library (from the DalysLibrary fork)
+- Sort & Filter: Title starts / Author starts letter grids, a Status tick list (All/Any, Favorite,
+  reading statuses, WIP, Completed in AO3) and a Text or tag search with quotes and `-` exclusions;
+  a Favorite heart in the book menu; library rows show `Chapters: 12/20`; the index holds up to
+  2500 books on the Picco (1000 on boards without PSRAM). Ported from DalysLibrary/aveso3-test
+  a4a5fd1e. Not yet tested on the device. (319818a1)
+- The `SilentRestart.h` include uses the file's real capitalization, AvesO3 c42c118e. (9df0966a)
+
 ### Images and sleep screen (from CrossPoint)
 - Absolute grayscale for supported screens, CrossPoint e5dcc64f. (4aa4b3cf)
 - Sleep images skip the B/W pass, and white is transparent on sleep covers, CrossPoint 92ef5707.

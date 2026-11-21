@@ -68,6 +68,17 @@ memory, SD card, AO3 details); it moves to `.log.1` once it passes 32 KB. Hidden
 `._` files macOS copies alongside every file) and the `/read` archive are not indexed, and a
 damaged book cache is rebuilt, as when the book is opened.
 
+**AO3 library Sort & Filter** (from the DalysLibrary fork). Besides Fandom, Relationship, Sort and
+Order, the sheet has Title starts / Author starts (a letter grid; `&` is any first character that
+is not a letter or digit), Status (ticks for reading status, WIP, Completed in AO3 and Favorite,
+combined with All or Any) and Text or tag (title, author, series, fandom, relationships and the
+first four short tags; a space means either word, quotes keep a phrase, `-` excludes). Nothing
+changes until Apply. A long press on a book opens its menu, whose first row toggles the Favorite
+heart. Library rows show `Chapters: 12/20`, or `12/?` until the book is indexed again. The library
+holds up to 2500 books. Run Library Cleanup once after installing, so books indexed earlier get
+their status bits and existing hearts are copied into the progress files. The search text lives
+in `/.crosspoint/ao3_tag_text.tsv`; the first text search builds it, which can take a few minutes.
+
 **XTC.** Pages are fitted to the screen, and pages with zero dimensions are rejected.
 
 ## Notes for developers
