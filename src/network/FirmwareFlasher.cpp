@@ -281,6 +281,12 @@ Result flashFromSdPath(const char* sdPath, ProgressCb onProgress, void* ctx, boo
     LOG_ERR("FLASH", "no next-update partition");
     return Result::NO_PARTITION;
   }
+  // With a single OTA slot (the Picco) the "next" slot is the running one;
+  // erasing it would wipe the code that is executing.
+  if (dest == esp_ota_get_running_partition()) {
+    LOG_ERR("FLASH", "next-update partition %s is the running one", dest->label);
+    return Result::NO_PARTITION;
+  }
 
   // When the caller already ran validateImageFile() against this same partition
   // size (e.g. SdFirmwareUpdateActivity validates before the confirmation

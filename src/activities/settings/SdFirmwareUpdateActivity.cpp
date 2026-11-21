@@ -84,6 +84,12 @@ bool SdFirmwareUpdateActivity::validateFirmware() {
     errorMessage = tr(STR_INVALID_FIRMWARE);
     return false;
   }
+  // A single-slot layout (the Picco) has nowhere to write but the running app.
+  if (dest == esp_ota_get_running_partition()) {
+    LOG_ERR("FW", "no spare app partition: %s is running", dest->label);
+    errorMessage = tr(STR_FIRMWARE_NO_SPARE_SLOT);
+    return false;
+  }
   const size_t partitionLimit = dest->size;
   if (firmwareSize > partitionLimit) {
     LOG_ERR("FW", "firmware (%u bytes) exceeds partition (%u bytes)", static_cast<unsigned>(firmwareSize),
