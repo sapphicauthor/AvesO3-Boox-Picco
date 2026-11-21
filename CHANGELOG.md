@@ -46,7 +46,7 @@ Not yet tested on the device. Everything below builds.
 - Raincloud Extended theme: Raincloud with the Lyra 3 Covers tiles. (b0d062ee)
 - The Raincloud background is drawn at full strength in four Bayer-dithered tones, black and
   white only, and follows the sleep screen's Cover Mode (Fit/Crop) and Cover Filter. (787a8eed,
-  1b357e31, COMMIT)
+  1b357e31, d2bc8c4b)
 - The Raincloud home screen skips refreshes that would show the same frame again. (bdec9e87)
 - Every home-screen element gets a 3 px white outline; covers and boxes stay solid. (8d9532fd, 6b59c8c5)
 - Faster Raincloud drawing: precomputed shading (de6f8d00), source columns worked out once
