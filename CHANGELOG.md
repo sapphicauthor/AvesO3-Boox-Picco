@@ -14,22 +14,22 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
 - Build environment `[env:picco]`, `partitions_picco.csv` (keeps Boox's `safeboot` recovery
   firmware), board tag "picco", USB name AvesO3_Picco. (6bd774c6)
 - `pio run -e picco -t upload` writes only the app image, keeping Boox's bootloader, partition
-  table and NVS; it stops if any extra image is left (CrossPoint b6b7a6c). (29604ae6)
+  table and NVS; it stops if any extra image is left (CrossPoint b6b7a6c). (2ac720c8)
 - Online updates are off unless built with `AVESO3_ENABLE_OTA`. (f45e0b25)
 - Picco book covers are cached under their own filenames. (7d74f435)
 - SD-card firmware update refuses to run when the only app slot is the running one (the Picco's
-  layout, also CrossPoint's), instead of erasing the running app. (9808f4e7)
+  layout, also CrossPoint's), instead of erasing the running app. (55692bac)
 - The frontlight is probed before checking that it exists, so the Picco's light, its slide switch
-  and the control-center swipe work again (from CrossPoint #4234). (7d4ec7f9)
+  and the control-center swipe work again (from CrossPoint #4234). (3ed6f713)
 
 ### Privacy and security
 - Saved Wi-Fi networks (names and passwords) and the PIN are encrypted on the SD card with
-  AES-256-GCM under a per-device key kept in internal flash; old files migrate. (30dcff35, 2708d895)
+  AES-256-GCM under a per-device key kept in internal flash; old files migrate. (2b5ec0b3, 3d342b9c)
 - Network names, a password length and the access point address no longer go to the serial log;
-  a readable Wi-Fi config left by older firmware is cleared from NVS. (76fd41dd, e09adede)
+  a readable Wi-Fi config left by older firmware is cleared from NVS. (7c4467f6, 98a60311)
 - freeink-sdk follows CrossPoint `develop`: now `634a3f8` (was `e88ebd5`), bringing the newer
   Picco display work (SSD2677 light-gray timing, one-pass anti-aliasing, darker AA pixels, gray
-  artifact fixes, lighter transfers, B/W fallback). (f15c111b, 28b79e29)
+  artifact fixes, lighter transfers, B/W fallback). (f15c111b, b15f3a24)
 
 ### Picco controls
 - Parental PIN lock, with Set/Change PIN and an unlock screen at boot and wake. (20d0f5f7)
@@ -38,8 +38,8 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
 - Slide Switch setting: the hardware switch drives the frontlight, night mode or the touch
   reader controls. (37d13e1f)
   - Following CrossPoint #4234, the UI no longer offers a second toggle for the function the
-    switch owns. (23dd6b25)
-  - The switch position is applied before the first boot screen. (bae74c67)
+    switch owns. (6c10e9b8)
+  - The switch position is applied before the first boot screen. (fdf7d6a2)
 - Flip Picco: a control-center tile turns the whole UI 180 degrees, giving the case's wrist
   strap slack, with a full refresh so no ghost is left. (66b8411a)
 
@@ -50,59 +50,59 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
 - Raincloud Extended theme: Raincloud with the Lyra 3 Covers tiles. (b0d062ee)
 - The Raincloud background is drawn at full strength, black and white only, dithered from the
   picture's full luminance like CrossPoint's cover thumbnails, and follows the sleep screen's Cover
-  Mode (Fit/Crop) and Cover Filter. (787a8eed, 1b357e31, d2bc8c4b, 2d108f64)
-- The Raincloud home screen skips refreshes that would show the same frame again. (bdec9e87)
+  Mode (Fit/Crop) and Cover Filter. (5ad0aba9, c0c5e005, d5e8b36c, f0d50dc8)
+- The Raincloud home screen skips refreshes that would show the same frame again. (76cff77f)
 - Every home-screen element gets a 3 px white outline, including the selected book's text on its
-  gray highlight; covers and boxes stay solid. (8d9532fd, 6b59c8c5, f777856c)
+  gray highlight; covers and boxes stay solid. (0c28a1f1, 4a6629f4, 9f2e9268)
 - Faster Raincloud drawing: precomputed shading (de6f8d00), source columns worked out once
   (df6c4b8d), one-pass random pick (a5572ccf), the image folder scanned once per boot or SD/USB
-  change (7bd7cd50), a bit-parallel outline (246ebd67), and CrossPoint's gray-plane helper
-  (bf603b46).
+  change (7bd7cd50), a bit-parallel outline (7da663a1), and CrossPoint's gray-plane helper
+  (0a85952c).
 - Lyra caches the home cover after drawing a real cover instead of re-reading it from the SD card
-  on every redraw (same fix as AvesO3's 1.6.5 merge). (a6ce0a3e)
+  on every redraw (same fix as AvesO3's 1.6.5 merge). (c9574d93)
 
 ### Reading
 - XTC: pages with zero dimensions are rejected. (da49384b)
 - XTC: pages are fitted to the screen. (d5c8c8e3)
 - EPUB: damaged cache files are detected and rebuilt instead of crashing, by the AO3 indexer too.
-  (142b02e9, 7393b1a9)
+  (142b02e9, 4e35ad39)
 - EPUB: building a book's spine/TOC cache stops cleanly when memory runs low instead of aborting
-  (the crash in the device's core dump, during AO3 indexing). (d88550a2)
+  (the crash in the device's core dump, during AO3 indexing). (dd6581cd)
 - AO3 folder indexing logs every book it could not index, with the reason, to
   `/.crosspoint/ao3_index_failures.log`, in addition to the Failed Books page. The reason names the
-  step that failed (zip, book cache, contents list, memory, SD card, AO3 details). (3a980914,
-  1b3e6915, 6cfdab67)
+  step that failed (zip, book cache, contents list, memory, SD card, AO3 details). (bb804ddb,
+  d3a96e0d, 6f2943d7)
 - AO3 folder indexing skips hidden files, such as the "._" companions macOS writes next to every
-  file it copies, which it used to count and fail as books (e050d858), and the `/read` archive,
-  whose books it used to find again on every run (be691764).
+  file it copies, which it used to count and fail as books (3c874e3b), and the `/read` archive,
+  whose books it used to find again on every run (107af170).
 - EPUBs whose zip end record is more than 1 KB from the end (a long comment or trailing bytes)
-  open now; the search covers the 64 KB the zip format allows. (a6b73dbb)
+  open now; the search covers the 64 KB the zip format allows. (b02544c3)
 
 ### AO3 library (from the DalysLibrary fork)
 - Sort & Filter: Title starts / Author starts letter grids, a Status tick list (All/Any, Favorite,
   reading statuses, WIP, Completed in AO3) and a Text or tag search with quotes and `-` exclusions;
   a Favorite heart in the book menu; library rows show `Chapters: 12/20`; the index holds up to
   2500 books on the Picco (1000 on boards without PSRAM). Ported from DalysLibrary/aveso3-test
-  a4a5fd1e. Not yet tested on the device. (319818a1)
-- The `SilentRestart.h` include uses the file's real capitalization, AvesO3 c42c118e. (9df0966a)
+  a4a5fd1e. Not yet tested on the device. (1107b9ab)
+- The `SilentRestart.h` include uses the file's real capitalization, AvesO3 c42c118e. (36fb56da)
 
 ### Images and sleep screen (from CrossPoint)
-- Absolute grayscale for supported screens, CrossPoint e5dcc64f. (4aa4b3cf)
+- Absolute grayscale for supported screens, CrossPoint e5dcc64f. (95e0b288)
 - Sleep images skip the B/W pass, and white is transparent on sleep covers, CrossPoint 92ef5707.
-  (ea85f4d7)
-- Full-tone images in the EPUB reader on the Picco, CrossPoint 6e7caa22. (ac4024cc)
+  (1cc7b5e1)
+- Full-tone images in the EPUB reader on the Picco, CrossPoint 6e7caa22. (cc201c49)
 - The custom 4-level render modes (54fd01fa) were replaced by CrossPoint's version above.
 
 ### Lyra theme (from CrossPoint)
 - Lyra's continue-reading tile shows the reading percentage and a progress bar, CrossPoint 08d9d68.
   Raincloud shows the same on its tile, and Raincloud Extended a thin bar along the bottom of the
-  first cover. (2d637e7b, da3e03e0)
+  first cover. (32ac94ed, 044d13f9)
 
 ### Other fixes from CrossPoint
 - Time a screen spends blocked (a long download or index build) no longer counts toward auto-sleep,
-  CrossPoint 209cb53. (ef1b5819)
+  CrossPoint 209cb53. (9865be4b)
 - The web rename dialog selects only the name, so the extension is kept, CrossPoint bb7b653.
-  (ae8eb124)
+  (f17591e8)
 
 ### Text
 - Picco UI wording (sentence-style strings). (740acb20)

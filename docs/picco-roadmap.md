@@ -25,7 +25,7 @@ is done.
 
 Checked and closed: sleep screen and 4-level images (CrossPoint's versions), AO3 indexing (matches
 the device), SecureHttpClient (all differences come from the SDK), the settings loader (same keys
-and messages as the device), and the crash record (fixed by d88550a2).
+and messages as the device), and the crash record (fixed by dd6581cd).
 
 ## After the base is done
 
