@@ -11,7 +11,10 @@ is done.
    unchanged since 1.6.0: Ao3Librarian.cpp, Ao3FandomLogo.cpp, the SDK); a clean Picco build has
    no warnings (RAM 28.4%, flash 38.1%); the X4 `default` build also succeeds (flash 90.2%). The X4
    build refuses a project path with a space, so build it from a copy at a space-free path.
-2. **Device test**, only when the owner says so: Raincloud background and outline, Flip Picco and
+2. **Before the next flash:** Raincloud background in real gray tones (owner's choice), a way to
+   leave USB Drive mode without unplugging.
+3. **Device test (first round done 2026-11-21; fixed since: frontlight and control center, books
+   failing to index)**, only when the owner says so: Raincloud background and outline, Flip Picco and
    its full refresh, the PIN screen ignoring gestures, each Slide Switch mode, gray images and
    sleep images, AO3 folder indexing (the Failed Books page and the failure log).
 

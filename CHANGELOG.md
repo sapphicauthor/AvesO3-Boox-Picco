@@ -15,6 +15,14 @@ Not yet tested on the device. Everything below builds.
 - Picco book covers are cached under their own filenames. (7d74f435)
 - SD-card firmware update refuses to run when the only app slot is the running one (the Picco's
   layout, also CrossPoint's), instead of erasing the running app. (9808f4e7)
+- The frontlight is probed before checking that it exists, so the Picco's light, its slide switch
+  and the control-center swipe work again (from CrossPoint #4234). (7d4ec7f9)
+
+### Privacy and security
+- Saved Wi-Fi networks (names and passwords) and the PIN are encrypted on the SD card with
+  AES-256-GCM under a per-device key kept in internal flash; old files migrate. (30dcff35, 2708d895)
+- Network names, a password length and the access point address no longer go to the serial log;
+  a readable Wi-Fi config left by older firmware is cleared from NVS. (76fd41dd, e09adede)
 - freeink-sdk follows CrossPoint `develop`: now `634a3f8` (was `e88ebd5`), bringing the newer
   Picco display work (SSD2677 light-gray timing, one-pass anti-aliasing, darker AA pixels, gray
   artifact fixes, lighter transfers, B/W fallback). (f15c111b, 28b79e29)
@@ -52,8 +60,10 @@ Not yet tested on the device. Everything below builds.
   books with an invalid cache. (142b02e9)
 - EPUB: building a book's spine/TOC cache stops cleanly when memory runs low instead of aborting
   (the crash in the device's core dump, during AO3 indexing). (d88550a2)
-- AO3 folder indexing logs every book it could not index to
-  `/.crosspoint/ao3_index_failures.log`, in addition to the Failed Books page. (3a980914)
+- AO3 folder indexing logs every book it could not index, with the reason, to
+  `/.crosspoint/ao3_index_failures.log`, in addition to the Failed Books page. (3a980914, 1b3e6915)
+- EPUBs whose zip end record is more than 1 KB from the end (a long comment or trailing bytes)
+  open now; the search covers the 64 KB the zip format allows. (a6b73dbb)
 
 ### Images and sleep screen (from CrossPoint)
 - Absolute grayscale for supported screens, CrossPoint e5dcc64f. (4aa4b3cf)
