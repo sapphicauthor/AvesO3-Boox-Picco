@@ -23,6 +23,11 @@
 #include "fontIds.h"
 #include "../../Ao3Librarian.h"
 
+namespace {
+// How long the home screen must stay unchanged before the gray pass runs.
+constexpr unsigned long HOME_GRAY_PASS_DELAY_MS = 600;
+}  // namespace
+
 int HomeActivity::getMenuItemCount() const {
   const auto& metrics = UITheme::getInstance().getMetrics();
   int menuItems = 5;
@@ -207,6 +212,12 @@ void HomeActivity::freeCoverBuffer() {
 void HomeActivity::loop() {
   // Pin/Unpin popup (touch long-press on a cover) swallows all input while open.
   if (optionPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
+
+  if (grayPassDueAt != 0 && static_cast<long>(millis() - grayPassDueAt) >= 0) {
+    grayPassDueAt = 0;
+    grayPassRequested = true;
+    requestUpdate();
+  }
 
   const int menuCount = getMenuItemCount();
   const auto& metrics = UITheme::getInstance().getMetrics();
@@ -543,7 +554,16 @@ void HomeActivity::render(RenderLock&&) {
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   GUI.finishHomeScreen(renderer);
-  renderer.displayBuffer(cleanInitialRefresh && !firstRenderDone ? HalDisplay::HALF_REFRESH : HalDisplay::FAST_REFRESH);
+  const bool grayPass = grayPassRequested && firstRenderDone && GUI.homeGrayPassReady();
+  grayPassRequested = false;
+  if (grayPass) {
+    GUI.displayHomeGrayPass(renderer);
+    grayPassDueAt = 0;
+  } else {
+    renderer.displayBuffer(cleanInitialRefresh && !firstRenderDone ? HalDisplay::HALF_REFRESH
+                                                                   : HalDisplay::FAST_REFRESH);
+    grayPassDueAt = GUI.homeGrayPassReady() ? millis() + HOME_GRAY_PASS_DELAY_MS : 0;
+  }
 
   if (!firstRenderDone) {
     firstRenderDone = true;

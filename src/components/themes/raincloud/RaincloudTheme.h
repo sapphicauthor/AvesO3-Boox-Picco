@@ -17,6 +17,8 @@ class RaincloudTheme : public LyraTheme {
   bool isHomeHeaderRect(const GfxRenderer& renderer, Rect rect) const override;
   void drawHomeBackground(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const override;
   void finishHomeScreen(GfxRenderer& renderer) const override;
+  bool homeGrayPassReady() const override { return grayPassReady; }
+  void displayHomeGrayPass(GfxRenderer& renderer) const override;
   void fillSelectionBackground(const GfxRenderer& renderer, int x, int y, int width, int height) const override;
 
  private:
@@ -61,6 +63,9 @@ class RaincloudTheme : public LyraTheme {
   mutable size_t outlineBackgroundSize = 0;
   mutable size_t outlineMaskSize = 0;
   mutable bool outlinePending = false;
+  // Set by finishHomeScreen when the frame's picture can take the gray pass;
+  // outlineBackground then holds that BW frame and outlineMask its open space.
+  mutable bool grayPassReady = false;
 
   void pickIndexedBackground(std::string& selectedPath) const;
   void drawBackgroundLayer(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const;

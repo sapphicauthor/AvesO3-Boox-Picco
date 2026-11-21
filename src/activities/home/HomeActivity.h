@@ -20,6 +20,10 @@ class HomeActivity final : public Activity {
   bool hasOpdsServers = false;
   bool hasAo3Library = false;
   bool coverRendered = false;      // Track if cover has been rendered once
+  // Gray pass for themes that draw a picture (Raincloud): due once the home
+  // screen has been idle for HOME_GRAY_PASS_DELAY_MS after a render.
+  unsigned long grayPassDueAt = 0;
+  bool grayPassRequested = false;
   bool coverBufferStored = false;  // Track if cover buffer is stored
   // Home can be entered while Back is still held (e.g. leaving Settings with
   // Back): ignore that stale release until a fresh press is seen here.

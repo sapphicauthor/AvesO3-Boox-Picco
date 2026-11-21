@@ -396,6 +396,7 @@ void RaincloudTheme::drawHomeBackground(GfxRenderer& renderer, const std::vector
 }
 
 void RaincloudTheme::finishHomeScreen(GfxRenderer& renderer) const {
+  grayPassReady = false;
   if (!outlinePending) return;
   outlinePending = false;
   uint8_t* fb = renderer.getFrameBuffer();
@@ -404,6 +405,57 @@ void RaincloudTheme::finishHomeScreen(GfxRenderer& renderer) const {
   if (!fb || widthBytes <= 0 || fbSize > outlineBackgroundSize || fbSize * 3 > outlineMaskSize) return;
   composeOutlinedBackground(fb, outlineBackground.get(), outlineMask.get(), widthBytes * 8,
                             static_cast<int>(fbSize / widthBytes));
+
+  // Gray pass, as on the sleep screen: only with no cover filter, for a picture
+  // with gray levels, on a panel with full gray planes.
+  const auto mode = renderer.grayscaleCapabilities(HalDisplay::GrayscaleMode::Direct).supported()
+                        ? HalDisplay::GrayscaleMode::Direct
+                        : HalDisplay::GrayscaleMode::Absolute;
+  grayPassReady = drawnFromGrayCache && backgroundCache &&
+                  SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER &&
+                  renderer.grayscaleCapabilities(mode).supported();
+  if (grayPassReady) memcpy(outlineBackground.get(), fb, fbSize);  // keep the BW frame for the gray pass
+}
+
+void RaincloudTheme::displayHomeGrayPass(GfxRenderer& renderer) const {
+  if (!grayPassReady) return;
+  grayPassReady = false;
+  uint8_t* fb = renderer.getFrameBuffer();
+  const size_t fbSize = renderer.getBufferSize();
+  if (!fb || !backgroundCache || fbSize > outlineBackgroundSize || fbSize * 3 > outlineMaskSize) {
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    return;
+  }
+  const uint8_t* frame = outlineBackground.get();         // the BW home frame
+  const uint8_t* open = outlineMask.get() + 2 * fbSize;   // where the picture shows
+  const auto mode = renderer.grayscaleCapabilities(HalDisplay::GrayscaleMode::Direct).supported()
+                        ? HalDisplay::GrayscaleMode::Direct
+                        : HalDisplay::GrayscaleMode::Absolute;
+
+  memcpy(fb, frame, fbSize);
+  if (!renderer.displayGrayscaleBase(mode, HalDisplay::FAST_REFRESH)) {
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    return;
+  }
+  // Each plane: the picture's levels in its open space, the UI's own black and
+  // white everywhere else (full planes write every pixel).
+  for (const auto plane : {GfxRenderer::GRAYSCALE_LSB, GfxRenderer::GRAYSCALE_MSB}) {
+    renderer.clearScreen(0xFF);
+    renderer.setRenderMode(plane);
+    replayBackgroundCache(renderer, backgroundCache.get(), backgroundCacheCapacity);
+    for (size_t i = 0; i < fbSize; i++) fb[i] = (fb[i] & open[i]) | (frame[i] & ~open[i]);
+    if (plane == GfxRenderer::GRAYSCALE_LSB) {
+      renderer.copyGrayscaleLsbBuffers();
+    } else {
+      renderer.copyGrayscaleMsbBuffers();
+    }
+  }
+  renderer.displayGrayBuffer();
+  renderer.setRenderMode(GfxRenderer::BW);
+  // Put the BW frame back and hand it to the panel as the reference for the next
+  // fast refresh (as the reader does), so no gray ghost carries over.
+  memcpy(fb, frame, fbSize);
+  renderer.cleanupGrayscaleWithFrameBuffer();
 }
 
 void RaincloudTheme::drawBackgroundLayer(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const {

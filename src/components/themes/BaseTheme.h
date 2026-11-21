@@ -251,6 +251,10 @@ class BaseTheme {
   virtual void drawHomeBackground(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const {}
   // Last step of the home screen, after everything is drawn and before display.
   virtual void finishHomeScreen(GfxRenderer& renderer) const {}
+  // Optional gray pass for the last home frame, run once the home screen has
+  // been idle; replaces that frame's displayBuffer().
+  virtual bool homeGrayPassReady() const { return false; }
+  virtual void displayHomeGrayPass(GfxRenderer& renderer) const {}
   virtual void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                                    const int selectorIndex, bool& coverRendered, bool& coverBufferStored,
                                    bool& bufferRestored, std::function<bool()> storeCoverBuffer) const;
