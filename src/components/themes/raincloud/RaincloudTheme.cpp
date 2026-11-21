@@ -287,8 +287,11 @@ bool openRow(const uint8_t* halo, uint8_t* open, const uint8_t* neighbor, const 
   return changed;
 }
 
+// Width of the white outline around every home-screen element.
+constexpr int OUTLINE_PX = 3;
+
 // Lay the background back in around a UI drawn on white: every UI pixel keeps
-// a 2 px white outline (radius-2 octagon), and areas the UI encloses (covers,
+// an OUTLINE_PX white outline (a rounded octagon), and areas the UI encloses (covers,
 // boxes, the holes of letters) stay white, so only the open space around the UI
 // shows the image. fb and background are raw framebuffers (physical rows, 1 bit
 // per pixel, MSB = leftmost, 0 = black). Works in physical space, so it is the
@@ -299,28 +302,24 @@ void composeOutlinedBackground(uint8_t* fb, const uint8_t* background, uint8_t* 
                                const int height) {
   const int wb = width / 8;
   const size_t plane = static_cast<size_t>(wb) * height;
-  uint8_t* row = scratch;               // ink grown along rows, then the 3x3 square
-  uint8_t* halo = scratch + plane;      // radius-2 octagon around the ink
+  uint8_t* row = scratch;               // the ink, grown into a square
+  uint8_t* halo = scratch + plane;      // octagon of radius OUTLINE_PX around the ink
   uint8_t* open = scratch + 2 * plane;  // open space reachable from the edge
 
-  for (int y = 0; y < height; y++) {  // ink = black pixels; grow 1 px left/right
-    const uint8_t* f = fb + static_cast<size_t>(y) * wb;
-    uint8_t* r = row + static_cast<size_t>(y) * wb;
-    for (int b = 0; b < wb; b++) {
-      const uint8_t ink = static_cast<uint8_t>(~f[b]);
-      const uint8_t inkR = static_cast<uint8_t>((ink << 1) | (b + 1 < wb ? static_cast<uint8_t>(~f[b + 1]) >> 7 : 0));
-      const uint8_t inkL = static_cast<uint8_t>((ink >> 1) | (b > 0 ? static_cast<uint8_t>(~f[b - 1]) << 7 : 0));
-      r[b] = ink | inkR | inkL;
+  for (size_t i = 0; i < plane; i++) row[i] = static_cast<uint8_t>(~fb[i]);  // ink = black pixels
+  // Each pass grows the square by 1 px on every side (rows, then columns).
+  for (int pass = 0; pass < OUTLINE_PX - 1; pass++) {
+    for (int y = 0; y < height; y++) {
+      const uint8_t* r = row + static_cast<size_t>(y) * wb;
+      uint8_t* t = halo + static_cast<size_t>(y) * wb;
+      for (int b = 0; b < wb; b++) t[b] = r[b] | fromRight(r, b, wb) | fromLeft(r, b);
+    }
+    for (int y = 0; y < height; y++) {
+      const uint8_t* t = halo + static_cast<size_t>(y) * wb;
+      uint8_t* r = row + static_cast<size_t>(y) * wb;
+      for (int b = 0; b < wb; b++) r[b] = t[b] | (y > 0 ? t[b - wb] : 0) | (y + 1 < height ? t[b + wb] : 0);
     }
   }
-  for (int y = 0; y < height; y++) {  // 3x3 square (into halo temporarily)
-    const uint8_t* r = row + static_cast<size_t>(y) * wb;
-    uint8_t* s = halo + static_cast<size_t>(y) * wb;
-    for (int b = 0; b < wb; b++) {
-      s[b] = r[b] | (y > 0 ? r[b - wb] : 0) | (y + 1 < height ? r[b + wb] : 0);
-    }
-  }
-  memcpy(row, halo, plane);           // row now holds the square
   for (int y = 0; y < height; y++) {  // plus around the square = octagon
     const uint8_t* s = row + static_cast<size_t>(y) * wb;
     uint8_t* h = halo + static_cast<size_t>(y) * wb;
