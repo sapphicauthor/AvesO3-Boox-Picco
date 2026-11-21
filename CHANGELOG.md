@@ -48,7 +48,8 @@ Not yet tested on the device. Everything below builds.
   picture's full luminance like CrossPoint's cover thumbnails, and follows the sleep screen's Cover
   Mode (Fit/Crop) and Cover Filter. (787a8eed, 1b357e31, d2bc8c4b, 2d108f64)
 - The Raincloud home screen skips refreshes that would show the same frame again. (bdec9e87)
-- Every home-screen element gets a 3 px white outline; covers and boxes stay solid. (8d9532fd, 6b59c8c5)
+- Every home-screen element gets a 3 px white outline, including the selected book's text on its
+  gray highlight; covers and boxes stay solid. (8d9532fd, 6b59c8c5, f777856c)
 - Faster Raincloud drawing: precomputed shading (de6f8d00), source columns worked out once
   (df6c4b8d), one-pass random pick (a5572ccf), the image folder scanned once per boot or SD/USB
   change (7bd7cd50), a bit-parallel outline (246ebd67), and CrossPoint's gray-plane helper

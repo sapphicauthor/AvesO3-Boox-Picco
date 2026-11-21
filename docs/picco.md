@@ -47,7 +47,8 @@ reading orientation. Switching does a full refresh so no ghost image is left.
 
 **Raincloud and Raincloud Extended themes.** Lyra-based themes with a picture behind the home
 screen: the current book's cover, otherwise a random BMP from `/.sleep` (or `/sleep`). Every
-element gets a 3 px white outline so it stays readable; covers and boxes stay solid. Raincloud
+element gets a 3 px white outline so it stays readable, including the selected book's text on
+its gray highlight; covers and boxes stay solid. Raincloud
 Extended uses the Lyra 3 Covers layout. The background is shown at full strength, dithered
 from the picture's full luminance (black and white only, so the home screen never needs a gray
 refresh), follows the
