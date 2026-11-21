@@ -95,7 +95,8 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
 
 ### Lyra theme (from CrossPoint)
 - Lyra's continue-reading tile shows the reading percentage and a progress bar, CrossPoint 08d9d68.
-  Raincloud and Raincloud Extended keep their own tile without it. (2d637e7b)
+  Raincloud shows the same on its tile, and Raincloud Extended a thin bar along the bottom of the
+  first cover. (2d637e7b, da3e03e0)
 
 ### Other fixes from CrossPoint
 - Time a screen spends blocked (a long download or index build) no longer counts toward auto-sleep,

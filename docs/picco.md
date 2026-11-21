@@ -59,9 +59,10 @@ from the picture's full luminance (black and white only, so the home screen neve
 refresh), follows the
 sleep screen's Cover Mode and Cover Filter settings, and is cached in PSRAM.
 
-**Lyra reading progress.** On the Lyra theme the continue-reading tile shows how far into the book
-you are, as a percentage and a thin bar. Raincloud is built on Lyra's code but is kept a separate
-theme: it overrides the tile and does not show the progress line.
+**Reading progress on the home screen.** Lyra and Raincloud show how far into the current book you
+are, as a percentage and a thin bar under the author. Raincloud Extended shows a thin bar along the
+bottom of the first cover. Raincloud is built on Lyra's code but kept a separate theme: it has its own
+tile override, so later Lyra changes reach it only on purpose.
 
 **Home menu.** One page; OPDS Browser is a regular entry after Settings.
 

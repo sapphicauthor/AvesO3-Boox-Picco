@@ -21,7 +21,7 @@ is done.
    sleep images, AO3 folder indexing (the Failed Books page and the failure log), and the AO3
    library Sort & Filter from the DalysLibrary fork (Library Cleanup first, then filters, search,
    Favorite, chapter counts, and memory with a large library),
-   and Lyra's reading progress on the home screen (Raincloud unchanged).
+   and reading progress on the home screen (Lyra, Raincloud, and the cover bar on Raincloud Extended).
 
 Checked and closed: sleep screen and 4-level images (CrossPoint's versions), AO3 indexing (matches
 the device), SecureHttpClient (all differences come from the SDK), the settings loader (same keys
