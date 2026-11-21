@@ -45,7 +45,7 @@ Not yet tested on the device. Everything below builds.
   random image from the sleep folder). (ebcd2696)
 - Raincloud Extended theme: Raincloud with the Lyra 3 Covers tiles. (b0d062ee)
 - The Raincloud background is drawn at full grayscale. (787a8eed)
-- Every home-screen element gets a 2 px white outline; covers and boxes stay solid. (8d9532fd)
+- Every home-screen element gets a 3 px white outline; covers and boxes stay solid. (8d9532fd, 6b59c8c5)
 - Faster Raincloud drawing: precomputed shading (de6f8d00), source columns worked out once
   (df6c4b8d), one-pass random pick (a5572ccf), the image folder scanned once per boot or SD/USB
   change (7bd7cd50), a bit-parallel outline (246ebd67), and CrossPoint's gray-plane helper
