@@ -36,6 +36,11 @@ class RaincloudTheme : public LyraTheme {
   mutable int cachedWidth = 0;
   mutable int cachedHeight = 0;
   mutable int cachedOrientation = -1;
+  mutable uint8_t cachedCoverMode = 0xFF;  // sleep screen Cover Mode the cache was drawn with
+  mutable bool cachedHasGray = false;      // the cached picture has gray levels
+  // What the last home render drew: a cached picture with gray levels can get
+  // the sleep screen's gray pass once the home screen is idle.
+  mutable bool drawnFromGrayCache = false;
   mutable bool psramUnavailableLogged = false;
   // Usable random backgrounds from the last folder scan: the folder and the
   // file names, each followed by '\0'. Scanned once per boot and again only

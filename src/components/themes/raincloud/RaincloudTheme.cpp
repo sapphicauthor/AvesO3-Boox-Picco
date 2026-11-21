@@ -13,52 +13,30 @@
 #include <algorithm>
 #include <cstring>
 
+#include "CrossPointSettings.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "util/SdContentEpoch.h"
 
 namespace {
 constexpr int kBackgroundCoverHeight = 226;
-// How much of the image's darkness the background keeps: 100 draws it at full
-// grayscale, lower values lighten it toward white.
-constexpr float kBackgroundStrengthPercent = 100.0f;
 constexpr size_t kMaxBackgroundFileNameLen = 256;
-
-constexpr uint8_t kBayer4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
-
-// The lightening only depends on the 2-bit level, so it is worked out at compile
-// time: the pixel loop runs for every screen pixel and float division is slow.
-// BW: a pixel is drawn when its Bayer value is below the level's threshold.
-constexpr uint8_t bwThreshold(const unsigned level) {
-  const float darkness =
-      static_cast<float>(3 - static_cast<int>(level)) / 3.0f * kBackgroundStrengthPercent / 100.0f * 16.0f;
-  uint8_t count = 0;
-  while (count < 16 && count < darkness) count++;
-  return count;
-}
-// Gray modes: the 2-bit shade the level is lightened to (rounded half up).
-constexpr uint8_t grayShade(const unsigned level) {
-  const float value = 3.0f - static_cast<float>(3 - static_cast<int>(level)) * kBackgroundStrengthPercent / 100.0f;
-  int rounded = static_cast<int>(value);
-  if (value - rounded >= 0.5f) rounded++;
-  return static_cast<uint8_t>(rounded);
-}
-constexpr uint8_t kBwThreshold[4] = {bwThreshold(0), bwThreshold(1), bwThreshold(2), bwThreshold(3)};
-constexpr uint8_t kGrayShade[4] = {grayShade(0), grayShade(1), grayShade(2), grayShade(3)};
 
 }  // namespace
 
-// Draw one background pixel. level is the image's 2-bit gray (0 = black,
-// 3 = white), keeping kBackgroundStrengthPercent of its darkness.
+// Draw one background pixel the way the sleep screen draws a picture (drawBitmap):
+// in BW every non-white level is black (the picture keeps its own dithering), and
+// the gray passes write the level's planes. level is the image's 2-bit gray
+// (0 = black, 3 = white); invert applies the Inverted Black & White filter.
 void plotBackgroundPixel(const GfxRenderer& renderer, const int x, const int y, const unsigned level,
-                         const int renderMode) {
+                         const int renderMode, const bool invert) {
+  const unsigned shown = invert ? 3 - (level & 3) : level & 3;
   if (renderMode == GfxRenderer::BW) {
-    if (kBayer4[y & 3][x & 3] < kBwThreshold[level & 3]) renderer.drawPixel(x, y, true);
+    if (shown < 3) renderer.drawPixel(x, y, true);
     return;
   }
-
   if (renderMode != GfxRenderer::GRAYSCALE_LSB && renderMode != GfxRenderer::GRAYSCALE_MSB) return;
-  const auto pixel = grayPlanePixel(kGrayShade[level & 3], renderMode == GfxRenderer::GRAYSCALE_MSB,
+  const auto pixel = grayPlanePixel(static_cast<uint8_t>(shown), renderMode == GfxRenderer::GRAYSCALE_MSB,
                                     renderer.grayPlanesAreAbsolute());
   if (pixel.write) renderer.drawPixel(x, y, pixel.black);
 }
@@ -101,20 +79,24 @@ bool scanBackgroundFolder(const char* dirPath, std::string& names, uint16_t& cou
   return true;
 }
 
-// Draw a BMP scaled to cover the screen (centre crop). When cache is set, the
-// 2-bit level of every screen pixel is stored there as well.
-bool renderBackgroundBmp(const GfxRenderer& renderer, const std::string& path, uint8_t* cache, const size_t cacheSize) {
+// Draw a BMP over the screen following the sleep screen's Cover Mode: Crop fills
+// the screen (centre crop), Fit shows the whole picture centred on white. When
+// cache is set, the 2-bit level of every screen pixel is stored there as well
+// (white outside the picture). hasGray reports whether the BMP has gray levels.
+bool renderBackgroundBmp(const GfxRenderer& renderer, const std::string& path, uint8_t* cache, const size_t cacheSize,
+                         bool& hasGray) {
   HalFile file;
   if (!Storage.openFileForRead("THEME", path, file)) {
-    LOG_DBG("THEME", "Unable to open background image: %s", path.c_str());
+    LOG_DBG("THEME", "Unable to open background image");
     return false;
   }
 
   Bitmap bitmap(file);
   if (bitmap.parseHeaders() != BmpReaderError::Ok) {
-    LOG_DBG("THEME", "Invalid background BMP: %s", path.c_str());
+    LOG_DBG("THEME", "Invalid background BMP");
     return false;
   }
+  hasGray = bitmap.hasGreyscale();
 
   const int bmpWidth = bitmap.getWidth();
   const int bmpHeight = bitmap.getHeight();
@@ -124,64 +106,79 @@ bool renderBackgroundBmp(const GfxRenderer& renderer, const std::string& path, u
 
   const size_t cacheBytes = (static_cast<size_t>(screenWidth) * screenHeight + 3) / 4;
   if (cache && cacheSize < cacheBytes) return false;
-  if (cache) memset(cache, 0, cacheBytes);
+  if (cache) memset(cache, 0xFF, cacheBytes);  // level 3 (white) wherever the picture is not
 
-  const float screenAspect = static_cast<float>(screenWidth) / static_cast<float>(screenHeight);
-  const float bmpAspect = static_cast<float>(bmpWidth) / static_cast<float>(bmpHeight);
-  float cropWidth = static_cast<float>(bmpWidth);
-  float cropHeight = static_cast<float>(bmpHeight);
-  float cropX = 0.0f;
-  float cropY = 0.0f;
-  if (screenAspect < bmpAspect) {
-    cropWidth = static_cast<float>(bmpHeight) * screenAspect;
-    cropX = (static_cast<float>(bmpWidth) - cropWidth) * 0.5f;
+  // Source rectangle of the picture mapped onto a destination rectangle.
+  float srcX0 = 0.0f;
+  float srcY0 = 0.0f;
+  float srcWidth = static_cast<float>(bmpWidth);
+  float srcHeight = static_cast<float>(bmpHeight);
+  int dstX0 = 0;
+  int dstY0 = 0;
+  int dstWidth = screenWidth;
+  int dstHeight = screenHeight;
+  if (SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::FIT) {
+    const float scale = std::min(static_cast<float>(screenWidth) / bmpWidth, static_cast<float>(screenHeight) / bmpHeight);
+    dstWidth = std::max(1, std::min(screenWidth, static_cast<int>(bmpWidth * scale)));
+    dstHeight = std::max(1, std::min(screenHeight, static_cast<int>(bmpHeight * scale)));
+    dstX0 = (screenWidth - dstWidth) / 2;
+    dstY0 = (screenHeight - dstHeight) / 2;
   } else {
-    cropHeight = static_cast<float>(bmpWidth) / screenAspect;
-    cropY = (static_cast<float>(bmpHeight) - cropHeight) * 0.5f;
+    const float screenAspect = static_cast<float>(screenWidth) / static_cast<float>(screenHeight);
+    const float bmpAspect = static_cast<float>(bmpWidth) / static_cast<float>(bmpHeight);
+    if (screenAspect < bmpAspect) {
+      srcWidth = static_cast<float>(bmpHeight) * screenAspect;
+      srcX0 = (static_cast<float>(bmpWidth) - srcWidth) * 0.5f;
+    } else {
+      srcHeight = static_cast<float>(bmpWidth) / screenAspect;
+      srcY0 = (static_cast<float>(bmpHeight) - srcHeight) * 0.5f;
+    }
   }
 
   auto outputRow = makeUniqueNoThrow<uint8_t[]>((bmpWidth + 3) / 4);
   auto rowBytes = makeUniqueNoThrow<uint8_t[]>(bitmap.getRowBytes());
-  // Source column of every screen column: the same for every row, so it is
-  // worked out once instead of with a float divide per pixel.
+  // Source column of every screen column (-1 outside the picture): the same for
+  // every row, so it is worked out once instead of with a float divide per pixel.
   auto srcColumns = makeUniqueNoThrow<int[]>(screenWidth);
   if (!outputRow || !rowBytes || !srcColumns) {
     LOG_ERR("THEME", "OOM: background BMP row buffers");
     return false;
   }
   for (int x = 0; x < screenWidth; x++) {
-    srcColumns[x] = std::min(static_cast<int>((x + 0.5f) * cropWidth / screenWidth + cropX), bmpWidth - 1);
+    const bool inside = x >= dstX0 && x < dstX0 + dstWidth;
+    srcColumns[x] =
+        inside ? std::min(static_cast<int>((x - dstX0 + 0.5f) * srcWidth / dstWidth + srcX0), bmpWidth - 1) : -1;
   }
 
   const int renderMode = renderer.getRenderMode();
+  const bool invert = SETTINGS.sleepScreenCoverFilter ==
+                      CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE;
   const bool topDown = bitmap.isTopDown();
-  int screenY = 0;
-  int step = 1;
-  if (!topDown) {
-    step = -1;
-    screenY = screenHeight - 1;
-  }
+  int screenY = topDown ? dstY0 : dstY0 + dstHeight - 1;
+  const int step = topDown ? 1 : -1;
 
   for (int row = 0; row < bmpHeight; row++) {
     if (bitmap.readNextRow(outputRow.get(), rowBytes.get()) != BmpReaderError::Ok) {
-      LOG_ERR("THEME", "Failed to read background BMP row %d: %s", row, path.c_str());
+      LOG_ERR("THEME", "Failed to read background BMP row %d", row);
       return false;
     }
     const int srcRow = topDown ? row : bmpHeight - 1 - row;
 
-    while (screenY >= 0 && screenY < screenHeight) {
-      const int srcY = std::min(static_cast<int>((screenY + 0.5f) * cropHeight / screenHeight + cropY), bmpHeight - 1);
+    while (screenY >= dstY0 && screenY < dstY0 + dstHeight) {
+      const int srcY =
+          std::min(static_cast<int>((screenY - dstY0 + 0.5f) * srcHeight / dstHeight + srcY0), bmpHeight - 1);
       if (srcY != srcRow) break;
 
       for (int x = 0; x < screenWidth; x++) {
         const int srcX = srcColumns[x];
+        if (srcX < 0) continue;
         const uint8_t level = (outputRow[srcX / 4] >> (6 - (srcX * 2) % 8)) & 0x3;
         if (cache) {
           const size_t cacheIndex = static_cast<size_t>(screenY) * screenWidth + x;
           const int shift = 6 - static_cast<int>(cacheIndex % 4) * 2;
           cache[cacheIndex / 4] = (cache[cacheIndex / 4] & ~(0x3 << shift)) | (level << shift);
         }
-        plotBackgroundPixel(renderer, x, screenY, level, renderMode);
+        plotBackgroundPixel(renderer, x, screenY, level, renderMode, invert);
       }
       screenY += step;
     }
@@ -195,11 +192,13 @@ bool replayBackgroundCache(const GfxRenderer& renderer, const uint8_t* cache, co
   if (cacheSize < (static_cast<size_t>(screenWidth) * screenHeight + 3) / 4) return false;
 
   const int renderMode = renderer.getRenderMode();
+  const bool invert = SETTINGS.sleepScreenCoverFilter ==
+                      CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE;
   for (int y = 0; y < screenHeight; y++) {
     for (int x = 0; x < screenWidth; x++) {
       const size_t cacheIndex = static_cast<size_t>(y) * screenWidth + x;
       const uint8_t level = (cache[cacheIndex / 4] >> (6 - (cacheIndex * 2) % 8)) & 0x3;
-      plotBackgroundPixel(renderer, x, y, level, renderMode);
+      plotBackgroundPixel(renderer, x, y, level, renderMode, invert);
     }
   }
   return true;
@@ -408,6 +407,7 @@ void RaincloudTheme::finishHomeScreen(GfxRenderer& renderer) const {
 }
 
 void RaincloudTheme::drawBackgroundLayer(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const {
+  drawnFromGrayCache = false;
   const RecentBook* book = recentBooks.empty() ? nullptr : &recentBooks.front();
   const bool bookChanged = book ? book->path != backgroundBookPath : !backgroundBookPath.empty();
   const bool coverChanged = book ? book->coverBmpPath != backgroundCoverPath : !backgroundCoverPath.empty();
@@ -432,9 +432,13 @@ void RaincloudTheme::drawBackgroundLayer(GfxRenderer& renderer, const std::vecto
   auto drawCachedOrLoad = [this, &width, &height, &orientation, &renderer, &cacheBytes](const std::string& path) {
     if (path.empty()) return false;
 
+    const uint8_t coverMode = SETTINGS.sleepScreenCoverMode;
     if (backgroundCache) {
-      if (cachedPath == path && cachedWidth == width && cachedHeight == height && cachedOrientation == orientation) {
-        return replayBackgroundCache(renderer, backgroundCache.get(), backgroundCacheCapacity);
+      if (cachedPath == path && cachedWidth == width && cachedHeight == height && cachedOrientation == orientation &&
+          cachedCoverMode == coverMode) {
+        if (!replayBackgroundCache(renderer, backgroundCache.get(), backgroundCacheCapacity)) return false;
+        drawnFromGrayCache = cachedHasGray;
+        return true;
       }
     } else if (!psramUnavailableLogged) {
       backgroundCache.reset(static_cast<uint8_t*>(heap_caps_malloc(cacheBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
@@ -447,8 +451,9 @@ void RaincloudTheme::drawBackgroundLayer(GfxRenderer& renderer, const std::vecto
     }
 
     const bool useCache = backgroundCache && backgroundCacheCapacity >= cacheBytes;
+    bool hasGray = false;
     if (!renderBackgroundBmp(renderer, path, useCache ? backgroundCache.get() : nullptr,
-                             useCache ? backgroundCacheCapacity : 0)) {
+                             useCache ? backgroundCacheCapacity : 0, hasGray)) {
       cachedPath.clear();
       return false;
     }
@@ -457,6 +462,9 @@ void RaincloudTheme::drawBackgroundLayer(GfxRenderer& renderer, const std::vecto
       cachedWidth = width;
       cachedHeight = height;
       cachedOrientation = orientation;
+      cachedCoverMode = coverMode;
+      cachedHasGray = hasGray;
+      drawnFromGrayCache = hasGray;
     }
     return true;
   };
