@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <esp_log.h>
 #include <BoardConfig.h>
 #include <Epub.h>
 #include <FontCacheManager.h>
@@ -409,6 +410,9 @@ void setupDisplayAndFonts(bool seamless = false) {
 
 void setup() {
   BoardConfig::holdPowerRails();
+  // The Wi-Fi driver logs the network name at info level when it connects; keep
+  // it to warnings so Wi-Fi details never reach the serial port.
+  esp_log_level_set("wifi", ESP_LOG_WARN);
 
 #ifdef ENABLE_SERIAL_LOG
 #ifdef CROSSPOINT_WAIT_FOR_USB_SERIAL
