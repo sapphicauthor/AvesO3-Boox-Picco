@@ -44,7 +44,9 @@ Not yet tested on the device. Everything below builds.
 - Raincloud theme: Lyra with a background behind the home screen (the current book's cover, or a
   random image from the sleep folder). (ebcd2696)
 - Raincloud Extended theme: Raincloud with the Lyra 3 Covers tiles. (b0d062ee)
-- The Raincloud background is drawn at full grayscale. (787a8eed)
+- The Raincloud background is drawn like the sleep screen: same Cover Mode (Fit/Crop) and Cover
+  Filter, no re-dithering, and the sleep screen's gray pass once the home screen is idle for
+  0.6 s; menus and text stay black and white. (787a8eed, 1b357e31, 4e5f5ed7)
 - Every home-screen element gets a 3 px white outline; covers and boxes stay solid. (8d9532fd, 6b59c8c5)
 - Faster Raincloud drawing: precomputed shading (de6f8d00), source columns worked out once
   (df6c4b8d), one-pass random pick (a5572ccf), the image folder scanned once per boot or SD/USB
