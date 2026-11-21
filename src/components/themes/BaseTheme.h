@@ -251,10 +251,6 @@ class BaseTheme {
   virtual void drawHomeBackground(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const {}
   // Last step of the home screen, after everything is drawn and before display.
   virtual void finishHomeScreen(GfxRenderer& renderer) const {}
-  // Optional gray pass for the last home frame, run once the home screen has
-  // been idle; replaces that frame's displayBuffer().
-  virtual bool homeGrayPassReady() const { return false; }
-  virtual void displayHomeGrayPass(GfxRenderer& renderer) const {}
   // True when the finished home frame is the one the panel already shows, so
   // the home screen can skip the refresh. homeFrameShown() records each frame
   // the home screen sent to the panel.

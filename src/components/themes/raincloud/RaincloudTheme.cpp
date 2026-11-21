@@ -2,7 +2,6 @@
 
 #include <Arduino.h>
 #include <Bitmap.h>
-#include <BitmapHelpers.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
@@ -22,24 +21,31 @@ namespace {
 constexpr int kBackgroundCoverHeight = 226;
 constexpr size_t kMaxBackgroundFileNameLen = 256;
 
+constexpr uint8_t kBayer4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+// Bayer cells drawn black for each 2-bit level at full strength: (3 - level) / 3 of 16.
+constexpr uint8_t kBwThreshold[4] = {16, 11, 6, 0};
+
 }  // namespace
 
-// Draw one background pixel the way the sleep screen draws a picture (drawBitmap):
-// in BW every non-white level is black (the picture keeps its own dithering), and
-// the gray passes write the level's planes. level is the image's 2-bit gray
-// (0 = black, 3 = white); invert applies the Inverted Black & White filter.
-void plotBackgroundPixel(const GfxRenderer& renderer, const int x, const int y, const unsigned level,
-                         const int renderMode, const bool invert) {
+// Draw one background pixel. level is the image's 2-bit gray (0 = black,
+// 3 = white). With no cover filter the four levels are shown as Bayer dither
+// patterns; the Black & White filters draw every non-white level black, as the
+// sleep screen does, and invert applies the Inverted Black & White filter.
+void plotBackgroundPixel(const GfxRenderer& renderer, const int x, const int y, const unsigned level, const bool dither,
+                         const bool invert) {
   const unsigned shown = invert ? 3 - (level & 3) : level & 3;
-  if (renderMode == GfxRenderer::BW) {
-    if (shown < 3) renderer.drawPixel(x, y, true);
-    return;
-  }
-  if (renderMode != GfxRenderer::GRAYSCALE_LSB && renderMode != GfxRenderer::GRAYSCALE_MSB) return;
-  const auto pixel = grayPlanePixel(static_cast<uint8_t>(shown), renderMode == GfxRenderer::GRAYSCALE_MSB,
-                                    renderer.grayPlanesAreAbsolute());
-  if (pixel.write) renderer.drawPixel(x, y, pixel.black);
+  const bool black = dither ? kBayer4[y & 3][x & 3] < kBwThreshold[shown] : shown < 3;
+  if (black) renderer.drawPixel(x, y, true);
 }
+
+namespace {
+bool ditherBackground() {
+  return SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
+}
+bool invertBackground() {
+  return SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE;
+}
+}  // namespace
 
 namespace {
 bool isValidBmp(HalFile& file) {
@@ -82,9 +88,8 @@ bool scanBackgroundFolder(const char* dirPath, std::string& names, uint16_t& cou
 // Draw a BMP over the screen following the sleep screen's Cover Mode: Crop fills
 // the screen (centre crop), Fit shows the whole picture centred on white. When
 // cache is set, the 2-bit level of every screen pixel is stored there as well
-// (white outside the picture). hasGray reports whether the BMP has gray levels.
-bool renderBackgroundBmp(const GfxRenderer& renderer, const std::string& path, uint8_t* cache, const size_t cacheSize,
-                         bool& hasGray) {
+// (white outside the picture).
+bool renderBackgroundBmp(const GfxRenderer& renderer, const std::string& path, uint8_t* cache, const size_t cacheSize) {
   HalFile file;
   if (!Storage.openFileForRead("THEME", path, file)) {
     LOG_DBG("THEME", "Unable to open background image");
@@ -96,7 +101,6 @@ bool renderBackgroundBmp(const GfxRenderer& renderer, const std::string& path, u
     LOG_DBG("THEME", "Invalid background BMP");
     return false;
   }
-  hasGray = bitmap.hasGreyscale();
 
   const int bmpWidth = bitmap.getWidth();
   const int bmpHeight = bitmap.getHeight();
@@ -150,9 +154,8 @@ bool renderBackgroundBmp(const GfxRenderer& renderer, const std::string& path, u
         inside ? std::min(static_cast<int>((x - dstX0 + 0.5f) * srcWidth / dstWidth + srcX0), bmpWidth - 1) : -1;
   }
 
-  const int renderMode = renderer.getRenderMode();
-  const bool invert = SETTINGS.sleepScreenCoverFilter ==
-                      CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE;
+  const bool dither = ditherBackground();
+  const bool invert = invertBackground();
   const bool topDown = bitmap.isTopDown();
   int screenY = topDown ? dstY0 : dstY0 + dstHeight - 1;
   const int step = topDown ? 1 : -1;
@@ -178,7 +181,7 @@ bool renderBackgroundBmp(const GfxRenderer& renderer, const std::string& path, u
           const int shift = 6 - static_cast<int>(cacheIndex % 4) * 2;
           cache[cacheIndex / 4] = (cache[cacheIndex / 4] & ~(0x3 << shift)) | (level << shift);
         }
-        plotBackgroundPixel(renderer, x, screenY, level, renderMode, invert);
+        plotBackgroundPixel(renderer, x, screenY, level, dither, invert);
       }
       screenY += step;
     }
@@ -191,14 +194,13 @@ bool replayBackgroundCache(const GfxRenderer& renderer, const uint8_t* cache, co
   const int screenHeight = renderer.getScreenHeight();
   if (cacheSize < (static_cast<size_t>(screenWidth) * screenHeight + 3) / 4) return false;
 
-  const int renderMode = renderer.getRenderMode();
-  const bool invert = SETTINGS.sleepScreenCoverFilter ==
-                      CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE;
+  const bool dither = ditherBackground();
+  const bool invert = invertBackground();
   for (int y = 0; y < screenHeight; y++) {
     for (int x = 0; x < screenWidth; x++) {
       const size_t cacheIndex = static_cast<size_t>(y) * screenWidth + x;
       const uint8_t level = (cache[cacheIndex / 4] >> (6 - (cacheIndex * 2) % 8)) & 0x3;
-      plotBackgroundPixel(renderer, x, y, level, renderMode, invert);
+      plotBackgroundPixel(renderer, x, y, level, dither, invert);
     }
   }
   return true;
@@ -396,7 +398,6 @@ void RaincloudTheme::drawHomeBackground(GfxRenderer& renderer, const std::vector
 }
 
 void RaincloudTheme::finishHomeScreen(GfxRenderer& renderer) const {
-  grayPassReady = false;
   frameComposed = false;
   frameUnchanged = false;
   if (!outlinePending) return;
@@ -410,16 +411,6 @@ void RaincloudTheme::finishHomeScreen(GfxRenderer& renderer) const {
   frameComposed = true;
   frameUnchanged = shownValid && shownFrameSize >= fbSize && renderer.panelUpdateCount() == shownPanelUpdates &&
                    memcmp(fb, shownFrame.get(), fbSize) == 0;
-
-  // Gray pass, as on the sleep screen: only with no cover filter, for a picture
-  // with gray levels, on a panel with full gray planes.
-  const auto mode = renderer.grayscaleCapabilities(HalDisplay::GrayscaleMode::Direct).supported()
-                        ? HalDisplay::GrayscaleMode::Direct
-                        : HalDisplay::GrayscaleMode::Absolute;
-  grayPassReady = drawnFromGrayCache && backgroundCache &&
-                  SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER &&
-                  renderer.grayscaleCapabilities(mode).supported();
-  if (grayPassReady) memcpy(outlineBackground.get(), fb, fbSize);  // keep the BW frame for the gray pass
 }
 
 void RaincloudTheme::homeFrameShown(const GfxRenderer& renderer) const {
@@ -431,49 +422,7 @@ void RaincloudTheme::homeFrameShown(const GfxRenderer& renderer) const {
   shownPanelUpdates = renderer.panelUpdateCount();
 }
 
-void RaincloudTheme::displayHomeGrayPass(GfxRenderer& renderer) const {
-  if (!grayPassReady) return;
-  grayPassReady = false;
-  uint8_t* fb = renderer.getFrameBuffer();
-  const size_t fbSize = renderer.getBufferSize();
-  if (!fb || !backgroundCache || fbSize > outlineBackgroundSize || fbSize * 3 > outlineMaskSize) {
-    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
-    return;
-  }
-  const uint8_t* frame = outlineBackground.get();         // the BW home frame
-  const uint8_t* open = outlineMask.get() + 2 * fbSize;   // where the picture shows
-  const auto mode = renderer.grayscaleCapabilities(HalDisplay::GrayscaleMode::Direct).supported()
-                        ? HalDisplay::GrayscaleMode::Direct
-                        : HalDisplay::GrayscaleMode::Absolute;
-
-  memcpy(fb, frame, fbSize);
-  if (!renderer.displayGrayscaleBase(mode, HalDisplay::FAST_REFRESH)) {
-    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
-    return;
-  }
-  // Each plane: the picture's levels in its open space, the UI's own black and
-  // white everywhere else (full planes write every pixel).
-  for (const auto plane : {GfxRenderer::GRAYSCALE_LSB, GfxRenderer::GRAYSCALE_MSB}) {
-    renderer.clearScreen(0xFF);
-    renderer.setRenderMode(plane);
-    replayBackgroundCache(renderer, backgroundCache.get(), backgroundCacheCapacity);
-    for (size_t i = 0; i < fbSize; i++) fb[i] = (fb[i] & open[i]) | (frame[i] & ~open[i]);
-    if (plane == GfxRenderer::GRAYSCALE_LSB) {
-      renderer.copyGrayscaleLsbBuffers();
-    } else {
-      renderer.copyGrayscaleMsbBuffers();
-    }
-  }
-  renderer.displayGrayBuffer();
-  renderer.setRenderMode(GfxRenderer::BW);
-  // Put the BW frame back and hand it to the panel as the reference for the next
-  // fast refresh (as the reader does), so no gray ghost carries over.
-  memcpy(fb, frame, fbSize);
-  renderer.cleanupGrayscaleWithFrameBuffer();
-}
-
 void RaincloudTheme::drawBackgroundLayer(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const {
-  drawnFromGrayCache = false;
   const RecentBook* book = recentBooks.empty() ? nullptr : &recentBooks.front();
   const bool bookChanged = book ? book->path != backgroundBookPath : !backgroundBookPath.empty();
   const bool coverChanged = book ? book->coverBmpPath != backgroundCoverPath : !backgroundCoverPath.empty();
@@ -502,9 +451,7 @@ void RaincloudTheme::drawBackgroundLayer(GfxRenderer& renderer, const std::vecto
     if (backgroundCache) {
       if (cachedPath == path && cachedWidth == width && cachedHeight == height && cachedOrientation == orientation &&
           cachedCoverMode == coverMode) {
-        if (!replayBackgroundCache(renderer, backgroundCache.get(), backgroundCacheCapacity)) return false;
-        drawnFromGrayCache = cachedHasGray;
-        return true;
+        return replayBackgroundCache(renderer, backgroundCache.get(), backgroundCacheCapacity);
       }
     } else if (!psramUnavailableLogged) {
       backgroundCache.reset(static_cast<uint8_t*>(heap_caps_malloc(cacheBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
@@ -517,9 +464,8 @@ void RaincloudTheme::drawBackgroundLayer(GfxRenderer& renderer, const std::vecto
     }
 
     const bool useCache = backgroundCache && backgroundCacheCapacity >= cacheBytes;
-    bool hasGray = false;
     if (!renderBackgroundBmp(renderer, path, useCache ? backgroundCache.get() : nullptr,
-                             useCache ? backgroundCacheCapacity : 0, hasGray)) {
+                             useCache ? backgroundCacheCapacity : 0)) {
       cachedPath.clear();
       return false;
     }
@@ -529,8 +475,6 @@ void RaincloudTheme::drawBackgroundLayer(GfxRenderer& renderer, const std::vecto
       cachedHeight = height;
       cachedOrientation = orientation;
       cachedCoverMode = coverMode;
-      cachedHasGray = hasGray;
-      drawnFromGrayCache = hasGray;
     }
     return true;
   };
