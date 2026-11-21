@@ -731,7 +731,12 @@ bool Ao3Librarian::scrape(const Epub& epub, bool force) {
   char scrapedRel1[32]   = {};
   char scrapedRel2[32]   = {};
 
-  if (!parseTitlePage(epub, *meta, scrapedWorkId, scrapedDate, scrapedFandom, scrapedRel1, scrapedRel2)) return false;
+  if (!parseTitlePage(epub, *meta, scrapedWorkId, scrapedDate, scrapedFandom, scrapedRel1, scrapedRel2)) {
+    lastScrapeFailure_ = epub.getSpineItemsCount() == 0
+                             ? "book has no chapters"
+                             : "no AO3 work details (word count) on the first 3 pages: not an AO3 download?";
+    return false;
+  }
 
   strncpy(meta->filepath, epub.getPath().c_str(), 255);
 
@@ -786,11 +791,13 @@ bool Ao3Librarian::scrape(const Epub& epub, bool force) {
                          std::hash<std::string>{}(epub.getPath()));
 
     if (!writeIndexRecord(rec)) {
+        lastScrapeFailure_ = "could not save the library index to the SD card";
         return false;
     }
 
     return true;
   }
+  lastScrapeFailure_ = "could not save the library entry to the SD card";
   return false;
 }
 

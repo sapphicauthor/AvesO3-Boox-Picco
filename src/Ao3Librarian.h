@@ -26,6 +26,10 @@ class Ao3Librarian {
    * @return true if successful or if info already exists.
    */
   static bool scrape(const Epub& epub, bool force = false);
+  // Why the last scrape() failed, as a short fixed phrase (never book data), or
+  // nullptr. The caller clears it before scraping.
+  static const char* lastScrapeFailure() { return lastScrapeFailure_; }
+  static void clearLastScrapeFailure() { lastScrapeFailure_ = nullptr; }
 
   /**
    * @brief Reads the library info sidecar if it exists.
@@ -75,6 +79,7 @@ class Ao3Librarian {
   static int sanitizeIndex();
 
  private:
+  static inline const char* lastScrapeFailure_ = nullptr;
   /**
    * @brief Internal parser that handles the HTML streaming and anchor searching.
    */

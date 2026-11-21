@@ -132,6 +132,8 @@ class BookMetadataCache {
   // VersionMismatch: written by an older cache format.
   enum class LoadResult : uint8_t { Ok, Invalid, VersionMismatch };
   LoadResult load();
+  // True once a build stopped because the heap got too low.
+  bool ranOutOfMemory() const { return buildOutOfMemory; }
   SpineEntry getSpineEntry(int index);
   TocEntry getTocEntry(int index);
   // Cumulative byte size up to and including the given spine item (0 if out of range

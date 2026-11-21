@@ -48,6 +48,10 @@ class Epub {
   // makes load() fail instead of being rebuilt (library indexing skips such books).
   bool load(bool buildIfMissing = true, bool skipLoadingCss = false, bool skipScraping = false,
             bool rebuildInvalidCache = true);
+  // Why the last load() failed, as a short fixed phrase (never book data), or
+  // nullptr. Like ZipFile::lastFailure(), the caller clears it before loading.
+  static const char* lastLoadFailure() { return lastLoadFailure_; }
+  static void clearLastLoadFailure() { lastLoadFailure_ = nullptr; }
   bool clearCache() const;
   void setupCacheDir() const;
   const std::string& getCachePath() const;
@@ -88,4 +92,10 @@ class Epub {
   bool isAo3Completed() const;
   void saveAo3Info(const std::string& workId, const std::string& date, bool completed) const;
   std::string sniffPublisher() const;
+
+ private:
+  static inline const char* lastLoadFailure_ = nullptr;
+  static void noteLoadFailure(const char* reason) {
+    if (!lastLoadFailure_) lastLoadFailure_ = reason;
+  }
 };

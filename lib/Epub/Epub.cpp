@@ -54,6 +54,7 @@ bool Epub::parseContentOpf(BookMetadataCache::BookMetadata& bookMetadata, const 
   std::string contentOpfFilePath;
   if (!findContentOpfFile(&contentOpfFilePath)) {
     LOG_ERR("EBP", "Could not find content.opf in zip");
+    noteLoadFailure("not a valid EPUB: no contents list (content.opf)");
     return false;
   }
 
@@ -64,6 +65,7 @@ bool Epub::parseContentOpf(BookMetadataCache::BookMetadata& bookMetadata, const 
   size_t contentOpfSize;
   if (!getItemSize(contentOpfFilePath, &contentOpfSize)) {
     LOG_ERR("EBP", "Could not get size of content.opf");
+    noteLoadFailure("contents list (content.opf) could not be read");
     return false;
   }
 
@@ -71,11 +73,13 @@ bool Epub::parseContentOpf(BookMetadataCache::BookMetadata& bookMetadata, const 
                              writeSpineEntries ? bookMetadataCache.get() : nullptr);
   if (!opfParser.setup()) {
     LOG_ERR("EBP", "Could not setup content.opf parser");
+    noteLoadFailure("out of memory reading the contents list");
     return false;
   }
 
   if (!readItemContentsToStream(contentOpfFilePath, opfParser, 1024)) {
     LOG_ERR("EBP", "Could not read content.opf");
+    noteLoadFailure("contents list (content.opf) is damaged");
     return false;
   }
 
@@ -465,6 +469,7 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const bool
         bookMetadataCache.reset(new BookMetadataCache(cachePath));
         if (bookMetadataCache->load() != BookMetadataCache::LoadResult::Ok) {
           LOG_ERR("EBP", "Failed to reload cache after CSS rebuild");
+          noteLoadFailure("book cache could not be reloaded");
           return false;
         }
         const bool cssCacheChanged =
@@ -507,11 +512,13 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const bool
   if (buildIfMissing) {
     if (!mayBuild) {
       LOG_ERR("EBP", "Skipping EPUB with invalid metadata cache: %s", filepath.c_str());
+      noteLoadFailure("damaged book cache (book.bin), not rebuilt by indexing");
       return false;
     }
   } else {
     // If we didn't load from cache above and we aren't allowed to build, fail now
     if (!mayBuild) LOG_ERR("EBP", "Skipping EPUB with invalid metadata cache: %s", filepath.c_str());
+    noteLoadFailure(mayBuild ? "book not indexed yet" : "damaged book cache (book.bin), not rebuilt by indexing");
     return false;
   }
 
@@ -525,6 +532,7 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const bool
   // Begin building cache - stream entries to disk immediately
   if (!bookMetadataCache->beginWrite()) {
     LOG_ERR("EBP", "Could not begin writing cache");
+    noteLoadFailure("could not write the book cache to the SD card");
     return false;
   }
 
@@ -533,15 +541,19 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const bool
   BookMetadataCache::BookMetadata bookMetadata;
   if (!bookMetadataCache->beginContentOpfPass()) {
     LOG_ERR("EBP", "Could not begin writing content.opf pass");
+    noteLoadFailure("could not write the book cache to the SD card");
     return false;
   }
   if (!parseContentOpf(bookMetadata)) {
     LOG_ERR("EBP", "Could not parse content.opf");
+    noteLoadFailure("contents list (content.opf) could not be read");
     return false;
   }
   discoverCssFilesFromZip();
   if (!bookMetadataCache->endContentOpfPass()) {
     LOG_ERR("EBP", "Could not end writing content.opf pass");
+    noteLoadFailure(bookMetadataCache->ranOutOfMemory() ? "out of memory while indexing the book"
+                                                        : "could not save the chapter list");
     return false;
   }
   LOG_DBG("EBP", "OPF pass completed in %lu ms", millis() - opfStart);
@@ -550,6 +562,8 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const bool
   const uint32_t tocStart = millis();
   if (!bookMetadataCache->beginTocPass()) {
     LOG_ERR("EBP", "Could not begin writing toc pass");
+    noteLoadFailure(bookMetadataCache->ranOutOfMemory() ? "out of memory while indexing the book"
+                                                        : "could not write the book cache to the SD card");
     return false;
   }
 
@@ -574,6 +588,8 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const bool
 
   if (!bookMetadataCache->endTocPass()) {
     LOG_ERR("EBP", "Could not end writing toc pass");
+    noteLoadFailure(bookMetadataCache->ranOutOfMemory() ? "out of memory while indexing the book"
+                                                        : "could not save the table of contents");
     return false;
   }
   LOG_DBG("EBP", "TOC pass completed in %lu ms", millis() - tocStart);
@@ -581,6 +597,8 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const bool
   // Close the cache files
   if (!bookMetadataCache->endWrite()) {
     LOG_ERR("EBP", "Could not end writing cache");
+    noteLoadFailure(bookMetadataCache->ranOutOfMemory() ? "out of memory while indexing the book"
+                                                        : "could not write the book cache to the SD card");
     return false;
   }
 
@@ -588,6 +606,8 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const bool
   const uint32_t buildStart = millis();
   if (!bookMetadataCache->buildBookBin(filepath, bookMetadata)) {
     LOG_ERR("EBP", "Could not update mappings and sizes");
+    noteLoadFailure(bookMetadataCache->ranOutOfMemory() ? "out of memory while indexing the book"
+                                                        : "could not build the book index");
     return false;
   }
   LOG_DBG("EBP", "buildBookBin completed in %lu ms", millis() - buildStart);
@@ -609,6 +629,7 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const bool
   bookMetadataCache.reset(new BookMetadataCache(cachePath));
   if (bookMetadataCache->load() != BookMetadataCache::LoadResult::Ok) {
     LOG_ERR("EBP", "Failed to reload cache after writing");
+    noteLoadFailure("book cache could not be reloaded");
     return false;
   }
 

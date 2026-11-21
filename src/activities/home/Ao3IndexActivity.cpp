@@ -616,6 +616,8 @@ LOG_INF("AO3I", "pre  #%u maxAlloc=%u free=%u", (unsigned)currentBookIndex,
 
 bool indexedOk = false;
 ZipFile::clearLastFailure();
+Epub::clearLastLoadFailure();
+Ao3Librarian::clearLastScrapeFailure();
 {
   Epub epub(filePath, "/.crosspoint");
   if (epub.load(true, true, true, false)) {
@@ -633,14 +635,14 @@ if (indexedOk) {
   failureCount++;
   failedHashes.push_back(static_cast<uint32_t>(std::hash<std::string>{}(filePath)));
   if (failedBooks.size() < 10) failedBooks.push_back(filePath);
+  // Most specific first: the zip itself, then loading the book, then reading its AO3 details.
   const ZipFile::Failure zipFailure = ZipFile::lastFailure();
-  if (zipFailure == ZipFile::Failure::None) {
-    logFailedBook("failed to index", filePath);
-  } else {
-    char reason[96];
-    snprintf(reason, sizeof(reason), "failed to index (%s)", ZipFile::describe(zipFailure));
-    logFailedBook(reason, filePath);
-  }
+  const char* why = zipFailure != ZipFile::Failure::None ? ZipFile::describe(zipFailure)
+                    : Epub::lastLoadFailure()            ? Epub::lastLoadFailure()
+                                                         : Ao3Librarian::lastScrapeFailure();
+  char reason[128];
+  snprintf(reason, sizeof(reason), "failed to index (%s)", why ? why : "unknown reason");
+  logFailedBook(reason, filePath);
 }
 
 currentBookIndex++;
