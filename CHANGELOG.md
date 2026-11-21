@@ -65,7 +65,9 @@ Not yet tested on the device. Everything below builds.
 - EPUB: building a book's spine/TOC cache stops cleanly when memory runs low instead of aborting
   (the crash in the device's core dump, during AO3 indexing). (d88550a2)
 - AO3 folder indexing logs every book it could not index, with the reason, to
-  `/.crosspoint/ao3_index_failures.log`, in addition to the Failed Books page. (3a980914, 1b3e6915)
+  `/.crosspoint/ao3_index_failures.log`, in addition to the Failed Books page. The reason names the
+  step that failed (zip, book cache, contents list, memory, SD card, AO3 details). (3a980914,
+  1b3e6915, 6cfdab67)
 - EPUBs whose zip end record is more than 1 KB from the end (a long comment or trailing bytes)
   open now; the search covers the 64 KB the zip format allows. (a6b73dbb)
 
