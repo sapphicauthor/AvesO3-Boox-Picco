@@ -93,6 +93,10 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
 - Full-tone images in the EPUB reader on the Picco, CrossPoint 6e7caa22. (ac4024cc)
 - The custom 4-level render modes (54fd01fa) were replaced by CrossPoint's version above.
 
+### Lyra theme (from CrossPoint)
+- Lyra's continue-reading tile shows the reading percentage and a progress bar, CrossPoint 08d9d68.
+  Raincloud and Raincloud Extended keep their own tile without it. (2d637e7b)
+
 ### Other fixes from CrossPoint
 - Time a screen spends blocked (a long download or index build) no longer counts toward auto-sleep,
   CrossPoint 209cb53. (ef1b5819)

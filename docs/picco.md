@@ -59,6 +59,10 @@ from the picture's full luminance (black and white only, so the home screen neve
 refresh), follows the
 sleep screen's Cover Mode and Cover Filter settings, and is cached in PSRAM.
 
+**Lyra reading progress.** On the Lyra theme the continue-reading tile shows how far into the book
+you are, as a percentage and a thin bar. Raincloud is built on Lyra's code but is kept a separate
+theme: it overrides the tile and does not show the progress line.
+
 **Home menu.** One page; OPDS Browser is a regular entry after Settings.
 
 **AO3 indexing.** A folder run skips books it cannot index and keeps going. Afterwards the
