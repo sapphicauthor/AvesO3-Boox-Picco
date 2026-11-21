@@ -13,6 +13,8 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
 ### Picco support
 - Build environment `[env:picco]`, `partitions_picco.csv` (keeps Boox's `safeboot` recovery
   firmware), board tag "picco", USB name AvesO3_Picco. (6bd774c6)
+- `pio run -e picco -t upload` writes only the app image, keeping Boox's bootloader, partition
+  table and NVS; it stops if any extra image is left (CrossPoint b6b7a6c). (29604ae6)
 - Online updates are off unless built with `AVESO3_ENABLE_OTA`. (f45e0b25)
 - Picco book covers are cached under their own filenames. (7d74f435)
 - SD-card firmware update refuses to run when the only app slot is the running one (the Picco's

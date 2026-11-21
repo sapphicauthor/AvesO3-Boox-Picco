@@ -31,6 +31,11 @@ only the app image:
 | spiffs   | data     | `0xF50000` | `0x80000`  |
 | coredump | data     | `0xFD0000` | `0x10000`  |
 
+`pio run -e picco -t upload` writes only the app at `0xE0000`: `scripts/app_only_upload.py`
+(from CrossPoint) drops the bootloader, partition table and `boot_app0.bin` that a default
+ESP32 upload adds, and stops with an error if any of them is left. `boot_app0.bin` would
+otherwise land at `0xE000`, inside the Picco's NVS.
+
 ## Picco features
 
 **Parental PIN lock.** Settings → Controls → Set / Change PIN, then turn on PIN Lock. Boot and
