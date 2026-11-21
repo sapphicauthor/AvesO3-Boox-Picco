@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <Epub.h>
 #include <Logging.h>
+#include <cstring>
 #include <I18n.h>
 #include "../../components/UITheme.h"
 #include "../../fontIds.h"
@@ -12,6 +13,40 @@ namespace {
 
   constexpr uint32_t MIN_BLOCK_DIR    = 80 * 1024;
   constexpr uint32_t MIN_BLOCK_SINGLE = 48 * 1024;
+
+  // Every book a folder run could not index, one line each, so the list outlives
+  // the on-screen "Failed Books" page (which keeps 10). Past the cap the log moves
+  // to ".1" (one older copy kept) and a fresh one starts.
+  constexpr const char* FAILURE_LOG_PATH = "/.crosspoint/ao3_index_failures.log";
+  constexpr const char* FAILURE_LOG_OLD_PATH = "/.crosspoint/ao3_index_failures.log.1";
+  constexpr size_t FAILURE_LOG_MAX_BYTES = 32 * 1024;
+
+  // Best effort: an SD error only drops the line; indexing never depends on it.
+  // Opening a file allocates a little, so with almost no heap the line is skipped
+  // rather than risk an abort.
+  void appendFailureLogLine(const char* text, const std::string& path = std::string()) {
+    if (ESP.getMaxAllocHeap() < 4 * 1024) return;
+    HalFile log = Storage.open(FAILURE_LOG_PATH, O_WRONLY | O_CREAT | O_APPEND);
+    if (!log) return;
+    log.write(text, strlen(text));
+    if (!path.empty()) {
+      log.write(": ", 2);
+      log.write(path.c_str(), path.size());
+    }
+    log.write("\n", 1);
+  }
+
+  void rotateFailureLogIfLarge() {
+    size_t size = 0;
+    {
+      HalFile log = Storage.open(FAILURE_LOG_PATH, O_RDONLY);
+      if (!log) return;
+      size = log.size();
+    }
+    if (size <= FAILURE_LOG_MAX_BYTES) return;
+    Storage.remove(FAILURE_LOG_OLD_PATH);
+    Storage.rename(FAILURE_LOG_PATH, FAILURE_LOG_OLD_PATH);
+  }
 
 bool isLibraryFull() {
   const char* indexPath = "/.crosspoint/ao3_library_index.bin";
@@ -113,6 +148,7 @@ bool Ao3IndexActivity::handleConfirm() {
       failureCount = 0;
       failedBooks.clear();
       failedHashes.clear();
+      failureLogRunStarted = false;
     }
     startDirIndexing();
     return true;
@@ -565,6 +601,7 @@ void Ao3IndexActivity::tickDirIndexing() {
     failureCount++;
     failedHashes.push_back(static_cast<uint32_t>(std::hash<std::string>{}(filePath)));
     if (failedBooks.size() < 10) failedBooks.push_back(filePath);
+    logFailedBook("skipped (low memory)", filePath);
     currentBookIndex++;
     requestUpdate(true);
     return;
@@ -594,10 +631,20 @@ if (indexedOk) {
   failureCount++;
   failedHashes.push_back(static_cast<uint32_t>(std::hash<std::string>{}(filePath)));
   if (failedBooks.size() < 10) failedBooks.push_back(filePath);
+  logFailedBook("failed to index", filePath);
 }
 
 currentBookIndex++;
   requestUpdate(true);
+}
+
+void Ao3IndexActivity::logFailedBook(const char* reason, const std::string& path) {
+  if (!failureLogRunStarted) {
+    failureLogRunStarted = true;
+    rotateFailureLogIfLarge();
+    appendFailureLogLine("--- AO3 folder indexing run ---");
+  }
+  appendFailureLogLine(reason, path);
 }
 
 // ---------------------------------------------------------------------------

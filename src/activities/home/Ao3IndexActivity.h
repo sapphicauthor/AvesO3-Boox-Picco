@@ -64,6 +64,8 @@ class Ao3IndexActivity final : public Activity, private UiAppHost {
   size_t unindexedCount = 0;
   std::vector<std::string> failedBooks;
   std::vector<uint32_t> failedHashes;  // exclusion only, uncapped
+  bool failureLogRunStarted = false;   // run header written to the failure log
+  void logFailedBook(const char* reason, const std::string& path);
   uint32_t gateBlockKb_ = 0;           // largest block (KB) when the gate tripped
   std::string currentBookTitle;
 
