@@ -13,6 +13,8 @@ Not yet tested on the device. Everything below builds.
   firmware), board tag "picco", USB name AvesO3_Picco. (6bd774c6)
 - Online updates are off unless built with `AVESO3_ENABLE_OTA`. (f45e0b25)
 - Picco book covers are cached under their own filenames. (7d74f435)
+- SD-card firmware update refuses to run when the only app slot is the running one (the Picco's
+  layout, also CrossPoint's), instead of erasing the running app. (9808f4e7)
 - freeink-sdk follows CrossPoint `develop`: now `634a3f8` (was `e88ebd5`), bringing the newer
   Picco display work (SSD2677 light-gray timing, one-pass anti-aliasing, darker AA pixels, gray
   artifact fixes, lighter transfers, B/W fallback). (f15c111b, 28b79e29)
