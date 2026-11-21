@@ -48,6 +48,10 @@ Not yet tested on the device. Everything below builds.
 - XTC: pages are fitted to the screen. (d5c8c8e3)
 - EPUB: damaged cache files are detected and rebuilt instead of crashing; the AO3 indexer skips
   books with an invalid cache. (142b02e9)
+- EPUB: building a book's spine/TOC cache stops cleanly when memory runs low instead of aborting
+  (the crash in the device's core dump, during AO3 indexing). (d88550a2)
+- AO3 folder indexing logs every book it could not index to
+  `/.crosspoint/ao3_index_failures.log`, in addition to the Failed Books page. (3a980914)
 
 ### Images and sleep screen (from CrossPoint)
 - Absolute grayscale for supported screens, CrossPoint e5dcc64f. (4aa4b3cf)

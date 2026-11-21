@@ -5,17 +5,14 @@ is done.
 
 ## Before the first device test
 
-1. **AO3 indexing guard.** Skip-and-continue indexing is in and matches the device; check where
-   the skipped titles are listed. `Ao3IndexActivity::loadSettings` still differs from the device.
-2. **SecureHttpClient.** Three functions differ from the device firmware; find out whether that is
-   the SDK version or a local edit.
-3. **Settings loader.** `CrossPointSettings::fromJson` still differs from the device; identify why.
-4. **Crash record.** Review the coredump partition from the device (book titles in it are private
-   and ignored) and fix what the AvesO3 repositories have not.
-5. **Debug run.** Host tests in `test/` (needs cmake), static checks, a clean build.
-6. **Device test**, only when the owner says so: Raincloud background and outline, Flip Picco and
+1. **Debug run.** Host tests in `test/` (needs cmake), static checks (`pio check`), a clean build.
+2. **Device test**, only when the owner says so: Raincloud background and outline, Flip Picco and
    its full refresh, the PIN screen ignoring gestures, each Slide Switch mode, gray images and
-   sleep images.
+   sleep images, AO3 folder indexing (the Failed Books page and the failure log).
+
+Checked and closed: sleep screen and 4-level images (CrossPoint's versions), AO3 indexing (matches
+the device), SecureHttpClient (all differences come from the SDK), the settings loader (same keys
+and messages as the device), and the crash record (fixed by d88550a2).
 
 ## After the base is done
 
@@ -23,6 +20,8 @@ is done.
   pools (6251054b), overlay decoupled from sleep mode (51089beb), sleep-screen confirmation
   (6d649b66).
 - AvesO3 1.6.5 merge once upstream finishes it, and the AO3 Bookmarks feature.
+- After a low-memory skip, restart silently and resume indexing (AvesO3 1.6.5's restart), so
+  fewer books are skipped on long runs.
 - Picco emulation for screenshot tests ([eink-qemu](https://github.com/serialx/eink-qemu)).
 - Study the Boox `.opub` format.
 - Ideas from the stock Boox firmware: reading statistics, home widgets, an image gallery with

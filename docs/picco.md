@@ -52,6 +52,11 @@ Extended uses the Lyra 3 Covers layout. The background is cached in PSRAM.
 
 **Home menu.** One page; OPDS Browser is a regular entry after Settings.
 
+**AO3 indexing.** A folder run skips books it cannot index (too little memory, or a damaged
+book) and keeps going. Afterwards the Failed Books page lists up to 10 of them, and
+`/.crosspoint/ao3_index_failures.log` on the SD card keeps all of them, one line per book
+(moved to `.log.1` once it passes 32 KB).
+
 **XTC.** Pages are fitted to the screen, and pages with zero dimensions are rejected.
 
 ## Notes for developers
