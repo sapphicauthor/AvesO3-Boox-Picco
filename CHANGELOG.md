@@ -68,6 +68,8 @@ Not yet tested on the device. Everything below builds.
   `/.crosspoint/ao3_index_failures.log`, in addition to the Failed Books page. The reason names the
   step that failed (zip, book cache, contents list, memory, SD card, AO3 details). (3a980914,
   1b3e6915, 6cfdab67)
+- AO3 folder indexing skips hidden files, such as the "._" companions macOS writes next to every
+  file it copies, which it used to count and fail as books. (e050d858)
 - EPUBs whose zip end record is more than 1 KB from the end (a long comment or trailing bytes)
   open now; the search covers the 64 KB the zip format allows. (a6b73dbb)
 
