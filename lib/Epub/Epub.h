@@ -45,7 +45,7 @@ class Epub {
   ~Epub() = default;
   std::string& getBasePath() { return contentBasePath; }
   // rebuildInvalidCache: when false, a book.bin that exists but fails validation
-  // makes load() fail instead of being rebuilt (library indexing skips such books).
+  // makes load() fail instead of being rebuilt.
   bool load(bool buildIfMissing = true, bool skipLoadingCss = false, bool skipScraping = false,
             bool rebuildInvalidCache = true);
   // Why the last load() failed, as a short fixed phrase (never book data), or

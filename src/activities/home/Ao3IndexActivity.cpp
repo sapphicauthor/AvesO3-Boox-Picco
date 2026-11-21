@@ -384,7 +384,7 @@ void Ao3IndexActivity::tickSingleScraping() {
   LOG_INF("AO3I", "single pre  maxAlloc=%u free=%u", (unsigned)ESP.getMaxAllocHeap(),
         (unsigned)ESP.getFreeHeap());
   Epub epub(targetPath, "/.crosspoint");
-  if (!epub.load(true, true, true, false)) {
+  if (!epub.load(true, true, true)) {  // a damaged cache is rebuilt, as when reading
     state = State::ERROR;
     errorMessage = "Failed to load epub file structure.";
     requestUpdate(true);
@@ -623,7 +623,7 @@ Epub::clearLastLoadFailure();
 Ao3Librarian::clearLastScrapeFailure();
 {
   Epub epub(filePath, "/.crosspoint");
-  if (epub.load(true, true, true, false)) {
+  if (epub.load(true, true, true)) {  // a damaged cache is rebuilt, as when reading
     currentBookTitle = epub.getTitle();
     indexedOk = Ao3Librarian::scrape(epub, /*force=*/true);
   }
