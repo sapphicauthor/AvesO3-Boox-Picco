@@ -5,7 +5,12 @@ is done.
 
 ## Before the first device test
 
-1. **Debug run.** Host tests in `test/` (needs cmake), static checks (`pio check`), a clean build.
+1. ~~Debug run~~ (2026-11-21): 180/180 host tests pass (`cmake -S test -B build/test`, then
+   `cmake --build build/test` and `ctest --test-dir build/test`); `pio check -e picco` finds no
+   high or medium defects and none in changed code (its 32 low style notes are all in files
+   unchanged since 1.6.0: Ao3Librarian.cpp, Ao3FandomLogo.cpp, the SDK); a clean Picco build has
+   no warnings (RAM 28.4%, flash 38.1%); the X4 `default` build also succeeds (flash 90.2%). The X4
+   build refuses a project path with a space, so build it from a copy at a space-free path.
 2. **Device test**, only when the owner says so: Raincloud background and outline, Flip Picco and
    its full refresh, the PIN screen ignoring gestures, each Slide Switch mode, gray images and
    sleep images, AO3 folder indexing (the Failed Books page and the failure log).
