@@ -48,8 +48,9 @@ reading orientation. Switching does a full refresh so no ghost image is left.
 **Raincloud and Raincloud Extended themes.** Lyra-based themes with a picture behind the home
 screen: the current book's cover, otherwise a random BMP from `/.sleep` (or `/sleep`). Every
 element gets a 3 px white outline so it stays readable; covers and boxes stay solid. Raincloud
-Extended uses the Lyra 3 Covers layout. The background is shown at full strength in four
-dithered tones (black and white only, so the home screen never needs a gray refresh), follows the
+Extended uses the Lyra 3 Covers layout. The background is shown at full strength, dithered
+from the picture's full luminance (black and white only, so the home screen never needs a gray
+refresh), follows the
 sleep screen's Cover Mode and Cover Filter settings, and is cached in PSRAM.
 
 **Home menu.** One page; OPDS Browser is a regular entry after Settings.
