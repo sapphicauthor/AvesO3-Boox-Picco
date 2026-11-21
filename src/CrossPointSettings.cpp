@@ -2,6 +2,7 @@
 
 #include <I18n.h>
 #include <Logging.h>
+#include <DeviceSecret.h>
 #include <ObfuscationUtils.h>
 
 #include <algorithm>
@@ -101,7 +102,14 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   }
   // Parental PIN lock — not in SettingsList; the PIN is only ever stored obfuscated.
   if (parentalPin[0] != '\0') {
-    doc["parentalPin_obf"] = obfuscation::obfuscateToBase64(parentalPin);
+    // Encrypted under the device key (DeviceSecret.h). If that ever fails, keep
+    // the old obfuscated form so the lock still works.
+    const std::string sealedPin = device_secret::seal(parentalPin);
+    if (!sealedPin.empty()) {
+      doc["parentalPin_enc"] = sealedPin;
+    } else {
+      doc["parentalPin_obf"] = obfuscation::obfuscateToBase64(parentalPin);
+    }
   }
   doc["pinLockEnabled"] = pinLockEnabled;
   // Flip Picco — set from the control center, not in SettingsList.
@@ -244,12 +252,19 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
 
   // Parental PIN — a lock without a valid PIN would be unopenable, so any bad
   // value disables the lock rather than trusting it.
-  if (doc["parentalPin_obf"].is<const char*>()) {
+  const bool encryptedPin = doc["parentalPin_enc"].is<const char*>();
+  if (encryptedPin || doc["parentalPin_obf"].is<const char*>()) {
     bool ok = false;
     bool tooLong = false;
-    const std::string pin =
-        obfuscation::deobfuscateFromBase64(doc["parentalPin_obf"] | "", sizeof(parentalPin) - 1, &ok, &tooLong);
-    if (ok && isValidPin(pin.c_str())) {
+    std::string pin;
+    if (encryptedPin) {
+      ok = device_secret::open(doc["parentalPin_enc"] | "", pin);
+      tooLong = pin.size() > sizeof(parentalPin) - 1;
+    } else {
+      pin = obfuscation::deobfuscateFromBase64(doc["parentalPin_obf"] | "", sizeof(parentalPin) - 1, &ok, &tooLong);
+      needsResave = true;  // migrate the old obfuscated PIN to the encrypted form
+    }
+    if (ok && !tooLong && isValidPin(pin.c_str())) {
       copyToField(parentalPin, pin.c_str(), sizeof(parentalPin));
     } else {
       pinLockEnabled = 0;
