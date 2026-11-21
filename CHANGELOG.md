@@ -98,6 +98,16 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
   Raincloud shows the same on its tile, and Raincloud Extended a thin bar along the bottom of the
   first cover. (32ac94ed, 044d13f9)
 
+### Header and clock (from CrossPoint, as in AvesO3's 1.6.5 merge)
+- Clock settings use a time zone with daylight saving instead of a UTC offset, and the clock can be
+  shown in screen headers (Clock → Show in Header), CrossPoint 581c6374. (17f6b68e adcd1ad2 83a2a1e8 670e23f2 a6592685 )
+- One shared header for every theme, with a tappable back arrow on touch screens like the Picco
+  (not on Home or the crash screen), CrossPoint 720b995a; the header respects the screen's content
+  insets and corners, CrossPoint 01f09e0e. Lyra's header (and so Raincloud's) now starts 5 px lower,
+  with a 20 px status strip. (, )
+- Clock and battery sit in the same top corners on every built-in theme (battery top right, clock
+  top left), CrossPoint 8d758438 and ca1a8c1e. (, )
+
 ### Other fixes from CrossPoint
 - Time a screen spends blocked (a long download or index build) no longer counts toward auto-sleep,
   CrossPoint 209cb53. (9865be4b)
