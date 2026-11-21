@@ -3,6 +3,7 @@
 #include <HalStorage.h>
 #include <ArduinoJson.h>
 #include <Epub.h>
+#include <ZipFile.h>
 #include <Logging.h>
 #include <cstring>
 #include <I18n.h>
@@ -614,6 +615,7 @@ LOG_INF("AO3I", "pre  #%u maxAlloc=%u free=%u", (unsigned)currentBookIndex,
         (unsigned)largestBlock, (unsigned)freeHeap);
 
 bool indexedOk = false;
+ZipFile::clearLastFailure();
 {
   Epub epub(filePath, "/.crosspoint");
   if (epub.load(true, true, true, false)) {
@@ -631,7 +633,14 @@ if (indexedOk) {
   failureCount++;
   failedHashes.push_back(static_cast<uint32_t>(std::hash<std::string>{}(filePath)));
   if (failedBooks.size() < 10) failedBooks.push_back(filePath);
-  logFailedBook("failed to index", filePath);
+  const ZipFile::Failure zipFailure = ZipFile::lastFailure();
+  if (zipFailure == ZipFile::Failure::None) {
+    logFailedBook("failed to index", filePath);
+  } else {
+    char reason[96];
+    snprintf(reason, sizeof(reason), "failed to index (%s)", ZipFile::describe(zipFailure));
+    logFailedBook(reason, filePath);
+  }
 }
 
 currentBookIndex++;
