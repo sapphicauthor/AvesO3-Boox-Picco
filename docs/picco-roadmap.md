@@ -25,7 +25,8 @@ is done.
    and the shared header on Raincloud, Raincloud Extended, Lyra, Classic and RoundedRaff (battery and
    clock corners, header clock, the tappable back arrow, also with Flip Picco at 180°)),
    and the power-button privacy blank (every sleep screen mode, from the reader with gray text and
-   images, and in night mode).
+   images, and in night mode), and keyboard typing (quick taps, held keys for alternate characters,
+   sliding between keys).
 
 Checked and closed: sleep screen and 4-level images (CrossPoint's versions), AO3 indexing (matches
 the device), SecureHttpClient (all differences come from the SDK), the settings loader (same keys

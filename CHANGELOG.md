@@ -32,6 +32,8 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
   artifact fixes, lighter transfers, B/W fallback). (f15c111b, b15f3a24)
 
 ### Picco controls
+- Faster typing on the on-screen keyboard: a tapped key no longer lights up first, so each letter
+  costs one screen refresh instead of two; a held key still lights up before its long press. (40fe1055)
 - Parental PIN lock, with Set/Change PIN and an unlock screen at boot and wake. (20d0f5f7)
   - Settings are re-saved when the stored lock value is invalid. (fc2bf6a8)
   - The home gesture and the control-center swipe no longer leave the unlock screen. (595557c1)
@@ -111,6 +113,8 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
   top left), CrossPoint 8d758438 and ca1a8c1e. (, )
 
 ### Other fixes from CrossPoint
+- Finding your place in a chapter reads the page positions 32 at a time instead of one by one,
+  CrossPoint 1a5c8cd1. (4295162e)
 - Time a screen spends blocked (a long download or index build) no longer counts toward auto-sleep,
   CrossPoint 209cb53. (9865be4b)
 - The web rename dialog selects only the name, so the extension is kept, CrossPoint bb7b653.
