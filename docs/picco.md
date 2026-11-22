@@ -69,6 +69,9 @@ are, as a percentage and a thin bar under the author. Raincloud Extended shows a
 bottom of the first cover. Raincloud is built on Lyra's code but kept a separate theme: it has its own
 tile override, so later Lyra changes reach it only on purpose.
 
+**Text layout.** Line spacing is tighter than in AvesO3 (Tight 0.8, Normal 0.9, Wide 1.0, Extra Wide
+1.1 of the font's line height), and Settings → Text → Screen Margin goes from 0 to 20 px in 2 px steps.
+
 **Reading gestures.** While reading an EPUB, a swipe in from the left edge turns back a page; the
 swipe up from the bottom edge (Home) and the physical Back button leave the book as before.
 

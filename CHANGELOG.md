@@ -66,6 +66,8 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
   on every redraw (same fix as AvesO3's 1.6.5 merge). (c9574d93)
 
 ### Reading
+- Tighter line spacing (Tight 0.8, Normal 0.9, Wide 1.0, Extra Wide 1.1) and a finer screen margin
+  (0 to 20 px in 2 px steps, default 0). (bacf776f)
 - A swipe in from the left edge turns back a page while reading instead of leaving the book. (af7096bc)
 - The open chapter is laid out to the end while the reader is idle (only in frames with no button or
   page turn pending), and its page table and link list grow in small pieces, so a very long chapter
