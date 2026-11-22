@@ -4,11 +4,11 @@ Changes on this branch (`picco-recovery`) on top of [AvesO3](https://github.com/
 1.6.0, for the Boox Picco (see `docs/picco.md`). Entries are grouped the way they would be offered
 as pull requests; documentation commits like this file are not part of them.
 
-## Unreleased (2026-11-21)
+## AvesO3 Picco, first release (2026-11-21)
 
-Everything below builds. Tested on the device on 2026-11-21: frontlight and slide switch, the
-Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device test is listed in
-`docs/picco-roadmap.md`.
+Firmware version `1.6.0-picco`, released as `AvesO3_Picco.bin` (install: `docs/picco.md`). Everything
+below builds, passes the host tests, and was tested on the owner's Picco on 2026-11-21. Commits ported
+from CrossPoint, AvesO3 or the DalysLibrary fork keep their author or a `Co-Authored-By` credit.
 
 ### Picco support
 - Build environment `[env:picco]`, `partitions_picco.csv` (keeps Boox's `safeboot` recovery
