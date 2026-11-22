@@ -46,11 +46,9 @@ bool isUsableBackground(HalFile& file, const char* name) {
   return isValidBmp(file);
 }
 
-// Append every usable background in dirPath to names ('\0'-terminated each).
+// Append the full path of every usable background in dirPath to paths ('\0'-terminated each).
 // Returns false only when the filename buffer cannot be allocated.
-bool scanBackgroundFolder(const char* dirPath, std::string& names, uint16_t& count) {
-  names.clear();
-  count = 0;
+bool scanBackgroundFolder(const char* dirPath, std::string& paths, uint16_t& count) {
   auto dir = Storage.open(dirPath);
   if (!dir || !dir.isDirectory()) return true;
 
@@ -65,8 +63,10 @@ bool scanBackgroundFolder(const char* dirPath, std::string& names, uint16_t& cou
     if (!file) break;
     file.getName(name.get(), kMaxBackgroundFileNameLen);
     if (!isUsableBackground(file, name.get())) continue;
-    names.append(name.get());
-    names.push_back('\0');
+    paths.append(dirPath);
+    paths.push_back('/');
+    paths.append(name.get());
+    paths.push_back('\0');
     count++;
   }
   return true;
@@ -466,22 +466,18 @@ void RaincloudTheme::pickIndexedBackground(std::string& selectedPath) const {
   const uint32_t epoch = SdContentEpoch::current();
   if (!backgroundIndexValid || backgroundIndexEpoch != epoch) {
     backgroundIndexEpoch = epoch;
-    backgroundIndexDir = "/.sleep";
-    backgroundIndexValid = scanBackgroundFolder("/.sleep", backgroundIndexNames, backgroundIndexCount);
-    if (backgroundIndexValid && backgroundIndexCount == 0) {
-      backgroundIndexDir = "/sleep";
-      backgroundIndexValid = scanBackgroundFolder("/sleep", backgroundIndexNames, backgroundIndexCount);
-    }
+    // One pool from both sleep folders, like the sleep screen (CrossPoint 6251054b).
+    backgroundIndexPaths.clear();
+    backgroundIndexCount = 0;
+    backgroundIndexValid = scanBackgroundFolder("/.sleep", backgroundIndexPaths, backgroundIndexCount) &&
+                           scanBackgroundFolder("/sleep", backgroundIndexPaths, backgroundIndexCount);
   }
   if (backgroundIndexCount == 0) return;
 
   const auto target = static_cast<uint16_t>(random(backgroundIndexCount));
-  const char* name = backgroundIndexNames.c_str();
-  for (uint16_t i = 0; i < target; i++) name += strlen(name) + 1;
-  selectedPath.reserve(backgroundIndexDir.size() + strlen(name) + 1);
-  selectedPath = backgroundIndexDir;
-  selectedPath += "/";
-  selectedPath += name;
+  const char* path = backgroundIndexPaths.c_str();
+  for (uint16_t i = 0; i < target; i++) path += strlen(path) + 1;
+  selectedPath = path;
 }
 
 void RaincloudTheme::drawHomeBackground(GfxRenderer& renderer, const std::vector<RecentBook>& recentBooks) const {

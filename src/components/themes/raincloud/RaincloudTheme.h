@@ -50,11 +50,10 @@ class RaincloudTheme : public LyraTheme {
   mutable uint8_t cachedCoverMode = 0xFF;    // sleep screen Cover Mode the cache was drawn with
   mutable uint8_t cachedCoverFilter = 0xFF;  // ... and Cover Filter
   mutable bool psramUnavailableLogged = false;
-  // Usable random backgrounds from the last folder scan: the folder and the
-  // file names, each followed by '\0'. Scanned once per boot and again only
-  // when the SD content epoch moves (USB, file transfer) or a listed file fails.
-  mutable std::string backgroundIndexDir;
-  mutable std::string backgroundIndexNames;
+  // Usable random backgrounds from the last scan of /.sleep and /sleep: full
+  // paths, each followed by '\0'. Scanned once per boot and again only when the
+  // SD content epoch moves (USB, file transfer) or a listed file fails.
+  mutable std::string backgroundIndexPaths;
   mutable uint16_t backgroundIndexCount = 0;
   mutable bool backgroundIndexValid = false;
   mutable uint32_t backgroundIndexEpoch = 0;
