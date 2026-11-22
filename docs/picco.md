@@ -46,6 +46,11 @@ gestures and shortcuts (home swipe, control center, power-button shortcuts) are 
 night mode or the reader touch controls. The switch then owns that function: its setting, reader
 menu entry and control-center toggle are hidden or inactive, as in CrossPoint.
 
+**Privacy on sleep.** Putting the Picco to sleep with the power button first wipes the screen
+white with one fast refresh, so the page is gone straight away; then the sleep screen loads as
+usual. Quick Resume and Transparent sleep screens keep the current screen, so they are not wiped.
+Auto-sleep after the timeout is unchanged.
+
 **Flip Picco.** The third control-center tile ("Flip Picco: 0°" / "180°") turns the whole
 interface upside down, which gives the case's wrist strap slack. Readers start from their own
 reading orientation. Switching does a full refresh so no ghost image is left.

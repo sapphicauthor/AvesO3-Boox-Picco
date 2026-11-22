@@ -23,7 +23,9 @@ is done.
    Favorite, chapter counts, and memory with a large library),
    and reading progress on the home screen (Lyra, Raincloud, and the cover bar on Raincloud Extended),
    and the shared header on Raincloud, Raincloud Extended, Lyra, Classic and RoundedRaff (battery and
-   clock corners, header clock, the tappable back arrow, also with Flip Picco at 180°).
+   clock corners, header clock, the tappable back arrow, also with Flip Picco at 180°)),
+   and the power-button privacy blank (every sleep screen mode, from the reader with gray text and
+   images, and in night mode).
 
 Checked and closed: sleep screen and 4-level images (CrossPoint's versions), AO3 indexing (matches
 the device), SecureHttpClient (all differences come from the SDK), the settings loader (same keys

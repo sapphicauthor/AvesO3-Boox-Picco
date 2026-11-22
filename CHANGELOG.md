@@ -40,6 +40,8 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
   - Following CrossPoint #4234, the UI no longer offers a second toggle for the function the
     switch owns. (6c10e9b8)
   - The switch position is applied before the first boot screen. (fdf7d6a2)
+- Privacy on sleep: holding the power button to sleep wipes the page off the screen at once, before
+  the sleep screen loads (not in Quick Resume or Transparent, which reuse the screen). (b12ba0fa)
 - Flip Picco: a control-center tile turns the whole UI 180 degrees, giving the case's wrist
   strap slack, with a full refresh so no ghost is left. (66b8411a)
 
