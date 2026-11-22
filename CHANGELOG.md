@@ -99,7 +99,7 @@ from CrossPoint, AvesO3 or the DalysLibrary fork keep their author or a `Co-Auth
   reading statuses, WIP, Completed in AO3) and a Text or tag search with quotes and `-` exclusions;
   a Favorite heart in the book menu; library rows show `Chapters: 12/20`; the index holds up to
   2500 books on the Picco (1000 on boards without PSRAM). Ported from DalysLibrary/aveso3-test
-  a4a5fd1e. Not yet tested on the device. (1107b9ab)
+  a4a5fd1e. (1107b9ab)
 - The `SilentRestart.h` include uses the file's real capitalization, AvesO3 c42c118e. (36fb56da)
 
 ### Images and sleep screen (from CrossPoint)
@@ -124,13 +124,13 @@ from CrossPoint, AvesO3 or the DalysLibrary fork keep their author or a `Co-Auth
 
 ### Header and clock (from CrossPoint, as in AvesO3's 1.6.5 merge)
 - Clock settings use a time zone with daylight saving instead of a UTC offset, and the clock can be
-  shown in screen headers (Clock → Show in Header), CrossPoint 581c6374. (17f6b68e adcd1ad2 83a2a1e8 670e23f2 a6592685 )
+  shown in screen headers (Clock → Show in Header), CrossPoint 581c6374. (17f6b68e)
 - One shared header for every theme, with a tappable back arrow on touch screens like the Picco
   (not on Home or the crash screen), CrossPoint 720b995a; the header respects the screen's content
   insets and corners, CrossPoint 01f09e0e. Lyra's header (and so Raincloud's) now starts 5 px lower,
-  with a 20 px status strip. (, )
+  with a 20 px status strip. (adcd1ad2, 83a2a1e8)
 - Clock and battery sit in the same top corners on every built-in theme (battery top right, clock
-  top left), CrossPoint 8d758438 and ca1a8c1e. (, )
+  top left), CrossPoint 8d758438 and ca1a8c1e. (670e23f2, a6592685)
 
 ### Other fixes from CrossPoint
 - Finding your place in a chapter reads the page positions 32 at a time instead of one by one,
