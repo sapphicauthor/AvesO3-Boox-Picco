@@ -107,6 +107,10 @@ class KeyboardEntryActivity : public Activity {
   int delPressCount = 0;
   bool hintVisible = false;
   unsigned long hintShowTime = 0;
+  // Touch highlight state: waiting for TOUCH_HIGHLIGHT_DELAY_MS, or already on screen.
+  bool highlightPending = false;
+  bool highlightShown = false;
+  unsigned long highlightPendingSince = 0;
 
   void onComplete(std::string text);
   void onCancel();
@@ -144,6 +148,10 @@ class KeyboardEntryActivity : public Activity {
   static constexpr uint16_t DEL_LONG_PRESS_MS = 1500;
   static constexpr uint16_t TOUCH_LONG_PRESS_MS = 350;
   static constexpr uint16_t TOUCH_DEL_LONG_PRESS_MS = 900;
+  // A touched key lights up only once the press outlasts a quick tap, so a tapped key costs one
+  // refresh (the typed character) instead of two (highlight, then character). Well under
+  // TOUCH_LONG_PRESS_MS, so a hold still shows its key before the long press fires.
+  static constexpr uint16_t TOUCH_HIGHLIGHT_DELAY_MS = 150;
 
   // App-specific key id: toggles the URL snippet panel (URL fields only).
   static constexpr int16_t URL_PANEL_KEY = -3;

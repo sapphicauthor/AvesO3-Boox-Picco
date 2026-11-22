@@ -550,6 +550,8 @@ void KeyboardEntryActivity::loop() {
     togglePos = false;
     hintVisible = false;
     touchRouter.reset();
+    highlightPending = false;
+    highlightShown = false;
     requestUpdate();
     return;
   }
@@ -567,6 +569,8 @@ void KeyboardEntryActivity::loop() {
         touchRouter.update(interactions, pressedDown, static_cast<int16_t>(tx), static_cast<int16_t>(ty), tapped,
                            static_cast<int16_t>(tapX), static_cast<int16_t>(tapY), inContact, millis());
     if (result.event) {
+      highlightPending = false;
+      highlightShown = false;
       syncSelectionToValue(result.event.value);
       if (activateValue(result.event.value, result.event.longPress)) {
         requestUpdate();
@@ -574,6 +578,21 @@ void KeyboardEntryActivity::loop() {
       return;
     }
     if (result.activeChanged) {
+      if (highlightShown) {
+        // A highlight is already on screen (the finger slid or lifted off): repaint it now.
+        highlightPending = false;
+        highlightShown = pressedDown;
+        requestUpdate();
+      } else if (pressedDown) {
+        highlightPending = true;
+        highlightPendingSince = millis();
+      } else {
+        highlightPending = false;  // contact ended before the highlight was drawn: nothing to clear
+      }
+    }
+    if (highlightPending && inContact && millis() - highlightPendingSince >= TOUCH_HIGHLIGHT_DELAY_MS) {
+      highlightPending = false;
+      highlightShown = true;
       requestUpdate();
     }
     if (pressedDown || tapped) {
