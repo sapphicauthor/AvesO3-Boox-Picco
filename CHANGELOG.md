@@ -66,6 +66,10 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
   on every redraw (same fix as AvesO3's 1.6.5 merge). (c9574d93)
 
 ### Reading
+- The open chapter is laid out to the end while the reader is idle (only in frames with no button or
+  page turn pending), and its page table and link list grow in small pieces, so a very long chapter
+  no longer needs one large memory block; a chapter whose background build fails is then built only
+  as you read, CrossPoint f8936ba6 (without its Bluetooth parts). (4a5be270)
 - XTC: pages with zero dimensions are rejected. (da49384b)
 - XTC: pages are fitted to the screen. (d5c8c8e3)
 - EPUB: damaged cache files are detected and rebuilt instead of crashing, by the AO3 indexer too.
@@ -91,6 +95,14 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
 - The `SilentRestart.h` include uses the file's real capitalization, AvesO3 c42c118e. (36fb56da)
 
 ### Images and sleep screen (from CrossPoint)
+- Setting a picture as the sleep screen asks for confirmation first, CrossPoint 6d649b66. (9ee441d5)
+- Sleep images come from `/.sleep` and `/sleep` together, CrossPoint 6251054b (4226fd3f); the Raincloud
+  background uses both folders too (9a7e1492).
+- Every sleep image is shown once, in random order, before any repeats, CrossPoint d663dcc6. (79d229fe)
+- JPEG pictures open in the file browser's picture viewer and can be set as the sleep image,
+  CrossPoint 15503ac3. (b235e159)
+- New sleep screen "Cover + Transparent": the transparent overlay drawn over the current book's
+  cover, CrossPoint 51089beb. (43e0b930)
 - Absolute grayscale for supported screens, CrossPoint e5dcc64f. (95e0b288)
 - Sleep images skip the B/W pass, and white is transparent on sleep covers, CrossPoint 92ef5707.
   (1cc7b5e1)

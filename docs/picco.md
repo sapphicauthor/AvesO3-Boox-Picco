@@ -73,6 +73,12 @@ tile override, so later Lyra changes reach it only on purpose.
 Show in Header, once the clock has the time), and a back arrow you can tap on every screen except
 Home. Raincloud uses Lyra's header measurements, so it follows Lyra here.
 
+**Sleep screen.** Pictures come from `/.sleep` and `/sleep` together, each shown once in random order
+before repeats; Raincloud's home background uses the same two folders. "Cover + Transparent" draws
+the transparent overlay (`/sleep-overlay.png`, `/sleep-overlay.bmp` or the `.sleep-overlay` folder)
+over the current book's cover. JPEG, PNG and BMP pictures open from the file browser, and setting
+one as the sleep image asks first.
+
 **Home menu.** One page; OPDS Browser is a regular entry after Settings.
 
 **AO3 indexing.** A folder run skips books it cannot index and keeps going. Afterwards the
