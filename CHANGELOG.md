@@ -68,7 +68,9 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
 ### Reading
 - Tighter line spacing (Tight 0.8, Normal 0.9, Wide 1.0, Extra Wide 1.1) and a finer screen margin
   (0 to 20 px in 2 px steps, default 0). (bacf776f)
-- A swipe in from the left edge turns back a page while reading instead of leaving the book. (af7096bc)
+- While reading, a swipe in from the left edge turns back a page instead of leaving the book, and a
+  swipe in from the right edge turns to the next page; a slow edge swipe is never taken as a long
+  press (chapter skip). (af7096bc, 2ea733d7)
 - The open chapter is laid out to the end while the reader is idle (only in frames with no button or
   page turn pending), and its page table and link list grow in small pieces, so a very long chapter
   no longer needs one large memory block; a chapter whose background build fails is then built only

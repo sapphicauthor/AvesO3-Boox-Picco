@@ -28,7 +28,7 @@ is done.
    images, and in night mode), and keyboard typing (quick taps, held keys for alternate characters,
    sliding between keys), the sleep pack (both sleep folders, every image once, Cover + Transparent,
    JPEG viewer and set-as-sleep-image), and long chapters (page turns while the chapter finishes
-   building in the background), and the left-edge swipe paging back while reading.
+   building in the background), and the edge swipes while reading (left = back a page, right = next page, also when slow).
 
 Checked and closed: sleep screen and 4-level images (CrossPoint's versions), AO3 indexing (matches
 the device), SecureHttpClient (all differences come from the SDK), the settings loader (same keys
