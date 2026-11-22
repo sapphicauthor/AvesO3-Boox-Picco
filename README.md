@@ -1,3 +1,20 @@
+# AvesO3 for Boox Picco
+
+This is **AvesO3 for the Boox Picco**: [AvesO3](https://github.com/SiliconAves/AvesO3) 1.6.0 built
+for the Picco (ESP32-S3, 480x800 e-ink with touch, frontlight and slide switch), with Picco features
+such as a parental PIN lock, a privacy blank on sleep, Flip Picco, the Raincloud themes and AO3 library
+Sort & Filter.
+
+- **Install:** download `AvesO3_Picco.bin` from [Releases](../../releases) and follow
+  [docs/picco.md](docs/picco.md#installing-a-release). It writes only the app slot; Boox's recovery
+  firmware stays untouched.
+- **What changed:** [CHANGELOG.md](CHANGELOG.md). **What's next:** [docs/picco-roadmap.md](docs/picco-roadmap.md).
+- Not affiliated with Boox (Onyx), SiliconAves or the Archive of Our Own.
+
+The rest of this README is AvesO3's own.
+
+---
+
 # What's Different in AvesO3
 
 > [!WARNING]

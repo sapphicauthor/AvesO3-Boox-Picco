@@ -1,6 +1,6 @@
 # Changelog
 
-Changes on this branch (`picco-recovery`) on top of [AvesO3](https://github.com/SiliconAves/AvesO3)
+Changes in AvesO3 for Boox Picco (branch `boox-picco`) on top of [AvesO3](https://github.com/SiliconAves/AvesO3)
 1.6.0, for the Boox Picco (see `docs/picco.md`). Entries are grouped the way they would be offered
 as pull requests; documentation commits like this file are not part of them.
 

@@ -1,4 +1,4 @@
-# AvesO3 on the Boox Picco
+# AvesO3 for Boox Picco
 
 This branch builds AvesO3 for the **Boox Picco** (ESP32-S3, 480x800 e-ink with touch, frontlight
 and a hardware slide switch) and adds a few Picco features. `CHANGELOG.md` lists every change
