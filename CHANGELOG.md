@@ -37,6 +37,7 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
 - Parental PIN lock, with Set/Change PIN and an unlock screen at boot and wake. (20d0f5f7)
   - Settings are re-saved when the stored lock value is invalid. (fc2bf6a8)
   - The home gesture and the control-center swipe no longer leave the unlock screen. (595557c1)
+  - The PIN pad's 12 keys are twice as tall. (c363401a)
 - Slide Switch setting: the hardware switch drives the frontlight, night mode or the touch
   reader controls. (37d13e1f)
   - Following CrossPoint #4234, the UI no longer offers a second toggle for the function the
@@ -44,6 +45,8 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
   - The switch position is applied before the first boot screen. (fdf7d6a2)
 - Privacy on sleep: holding the power button to sleep wipes the page off the screen at once, before
   the sleep screen loads (not in Quick Resume or Transparent, which reuse the screen). (b12ba0fa)
+- The control-center touch tile reads "Page Touch: On/Off": it only switches taps and swipes on the
+  book page; with it off, the reader's edge swipes do nothing either. (d246991e, 4b7657ea)
 - Flip Picco: a control-center tile turns the whole UI 180 degrees, giving the case's wrist
   strap slack, with a full refresh so no ghost is left. (66b8411a)
 

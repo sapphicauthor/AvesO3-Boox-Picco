@@ -39,7 +39,7 @@ otherwise land at `0xE000`, inside the Picco's NVS.
 ## Picco features
 
 **Parental PIN lock.** Settings → Controls → Set / Change PIN, then turn on PIN Lock. Boot and
-wake then ask for the 4-digit PIN before continuing to the book or home screen. While the unlock screen is up, global
+wake then ask for the 4-digit PIN before continuing to the book or home screen. The 12-key PIN pad has extra-tall keys. While the unlock screen is up, global
 gestures and shortcuts (home swipe, control center, power-button shortcuts) are ignored.
 
 **Slide Switch.** Settings → Controls → Slide Switch binds the hardware switch to the frontlight,
@@ -50,6 +50,11 @@ menu entry and control-center toggle are hidden or inactive, as in CrossPoint.
 white with one fast refresh, so the page is gone straight away; then the sleep screen loads as
 usual. Quick Resume and Transparent sleep screens keep the current screen, so they are not wiped.
 Auto-sleep after the timeout is unchanged.
+
+**Page Touch.** The control-center tile "Page Touch: On/Off" switches only the taps and swipes on the
+book page (Settings → Controls → Touch Reader Controls), for reading with a palm on the glass. The
+rest of the screen keeps responding, so swiping down from the top and tapping the tile again turns it
+back on.
 
 **Flip Picco.** The third control-center tile ("Flip Picco: 0°" / "180°") turns the whole
 interface upside down, which gives the case's wrist strap slack. Readers start from their own
