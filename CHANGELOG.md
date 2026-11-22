@@ -66,6 +66,7 @@ Raincloud home screen, PIN lock and AO3 folder indexing; the rest of the device 
   on every redraw (same fix as AvesO3's 1.6.5 merge). (c9574d93)
 
 ### Reading
+- A swipe in from the left edge turns back a page while reading instead of leaving the book. (af7096bc)
 - The open chapter is laid out to the end while the reader is idle (only in frames with no button or
   page turn pending), and its page table and link list grow in small pieces, so a very long chapter
   no longer needs one large memory block; a chapter whose background build fails is then built only

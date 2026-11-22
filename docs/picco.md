@@ -69,6 +69,9 @@ are, as a percentage and a thin bar under the author. Raincloud Extended shows a
 bottom of the first cover. Raincloud is built on Lyra's code but kept a separate theme: it has its own
 tile override, so later Lyra changes reach it only on purpose.
 
+**Reading gestures.** While reading an EPUB, a swipe in from the left edge turns back a page; the
+swipe up from the bottom edge (Home) and the physical Back button leave the book as before.
+
 **Header.** Every theme shares one header: battery top right, clock top left (Settings → Clock →
 Show in Header, once the clock has the time), and a back arrow you can tap on every screen except
 Home. Raincloud uses Lyra's header measurements, so it follows Lyra here.
