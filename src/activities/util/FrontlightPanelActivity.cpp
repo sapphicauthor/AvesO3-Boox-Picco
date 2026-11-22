@@ -384,11 +384,13 @@ void FrontlightPanelActivity::buildPanelScreen(UiScreen& screen) {
     // The Flip Picco tile is labelled with the current turn ("Flip Picco: 0°").
     const char* orientLabel =
         I18N.get(SETTINGS.uiOrientation == 1 ? StrId::STR_FLIP_PICCO_180 : StrId::STR_FLIP_PICCO_0);
-    // "Touch On" / "Touch Off", from the existing state strings: the label
-    // names the current state of the touch-reader-controls setting.
+    // "Page Touch: On" / "Page Touch: Off", from the existing state strings: the
+    // label names the current state of the touch-reader-controls setting, which
+    // only covers taps and swipes on the book page (the rest of the screen keeps
+    // responding).
     const bool touchOn = SETTINGS.touchReaderControls != CrossPointSettings::TOUCH_READER_OFF;
     char touchLabel[48];
-    snprintf(touchLabel, sizeof(touchLabel), "%s %s", tr(STR_TOUCH_TOGGLE),
+    snprintf(touchLabel, sizeof(touchLabel), "%s: %s", tr(STR_TOUCH_TOGGLE),
              I18N.get(touchOn ? StrId::STR_STATE_ON : StrId::STR_STATE_OFF));
 
     const char* labels[kTileCount] = {tr(STR_NIGHT_MODE), tr(STR_FORCE_REFRESH), orientLabel, touchLabel};
