@@ -49,6 +49,9 @@ on. Host tests: `cmake -S test -B build/test`, `cmake --build build/test`, then
 
 freeink-sdk follows the commit CrossPoint's `develop` branch uses (currently `634a3f8`).
 
+`scripts/strip_build_paths.py` maps the builder's home folder to `~` and the project folder to `.`
+in the file names that framework log messages embed, so a published image carries no local paths.
+
 ## Partitions: read before flashing
 
 The Picco keeps Boox's own recovery firmware in the `safeboot` partition at `0x20000`; it can
