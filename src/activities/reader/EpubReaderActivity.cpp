@@ -528,8 +528,10 @@ void EpubReaderActivity::loop() {
 
   const auto touch = ReaderUtils::detectTouchPageTurn(renderer, mappedInput);
   // On the reading page a swipe in from the left edge turns back a page instead of leaving the book
-  // (the reader draws no header, so the only Back gesture here is that edge swipe).
+  // (the reader draws no header, so the only Back gesture here is that edge swipe), and a swipe in
+  // from the right edge turns to the next page.
   const bool edgeSwipeBack = mappedInput.hasTouch() && mappedInput.wasBackGesture();
+  const bool edgeSwipeNext = mappedInput.hasTouch() && mappedInput.wasRightEdgeSwipe();
 
   if (showBookmarkMessage && (millis() - bookmarkMessageTime) >= ReaderUtils::BOOKMARK_MESSAGE_DURATION_MS) {
     showBookmarkMessage = false;
@@ -717,7 +719,7 @@ void EpubReaderActivity::loop() {
 
   auto [prevTriggered, nextTriggered, fromTilt] = ReaderUtils::detectPageTurn(mappedInput);
   prevTriggered = prevTriggered || touch.prev || edgeSwipeBack;
-  nextTriggered = nextTriggered || touch.next;
+  nextTriggered = nextTriggered || touch.next || edgeSwipeNext;
   if (!prevTriggered && !nextTriggered) {
     // Nothing to act on in this frame: build more of the chapter.
     backgroundBuildTick();
@@ -731,7 +733,10 @@ void EpubReaderActivity::loop() {
     return;
   }
 
-  const unsigned long heldMs = (touch.prev || touch.next) ? touch.heldMs : mappedInput.getHeldTime();
+  // A swipe is never a long press, however slowly the finger moved (as in Swipe page-turn mode).
+  const unsigned long heldMs = (touch.prev || touch.next)         ? touch.heldMs
+                               : (edgeSwipeBack || edgeSwipeNext) ? 0
+                                                                  : mappedInput.getHeldTime();
   const bool longPress = !fromTilt && heldMs >= ReaderUtils::SKIP_HOLD_MS;
   if (longPress && SETTINGS.longPressButtonBehavior == SETTINGS.CHAPTER_SKIP) {
     skipPages(nextTriggered ? 1 : -1);
